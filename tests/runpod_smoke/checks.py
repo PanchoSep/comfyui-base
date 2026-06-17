@@ -15,10 +15,11 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Optional
+from typing import Callable, Optional
 
 from . import config
 from .log import log
@@ -372,6 +373,13 @@ def port_check_command(test_port: int, wait_timeout: int) -> str:
         "      *) ;; "
         "    esac; "
         "  fi; "
+        # Heartbeat every 30s so the operator on the other side of the
+        # SSH pipe sees the probe is still alive (and what the last HTTP
+        # code looked like) instead of staring at silence for up to
+        # PORT_WAIT_TIMEOUT seconds.
+        "  if [ $((i % 30)) -eq 0 ]; then "
+        f"    echo \"  ...still probing 127.0.0.1:{test_port} at ${{i}}s/{wait_timeout}s (last code=$CODE)\"; "
+        "  fi; "
         "  sleep 1; "
         "done; "
         # Final classification. CODE is 'pending' if the loop never even
@@ -391,24 +399,90 @@ def port_check_command(test_port: int, wait_timeout: int) -> str:
     )
 
 
-def run_port_check(host: str, port: int, test_port: int) -> tuple[bool, str]:
+def run_port_check(
+    host: str, port: int, test_port: int,
+    on_line: Optional[Callable[[str], None]] = None,
+) -> tuple[bool, str]:
     """SSH into the pod and probe `127.0.0.1:<test_port>` for an HTTP
-    response. Returns (ok, output). ok=True iff the server bound the
-    port AND returned an HTTP <500.
+    response. ok=True iff the server bound the port AND returned an
+    HTTP <500.
+
+    Streams stdout line-by-line via the optional `on_line` callback so
+    the operator sees live progress (the bash script emits heartbeat
+    lines every 30s). With PORT_WAIT_TIMEOUT now at 900s this matters:
+    earlier we used subprocess.run(capture_output=True), which silently
+    buffers the entire output until the SSH process exits — meaning
+    15 minutes of nothing followed by a wall of text, including for
+    plain successes.
+
+    Returns (ok, last_line) — `last_line` is the final stdout line
+    (typically the bash 'port N OK' / 'FAIL: ...' summary), kept as a
+    short reason string for the FAIL outcome of the runner.
     """
     cmd = port_check_command(test_port, config.PORT_WAIT_TIMEOUT)
     ssh_cmd = [*_ssh_command_prefix(host, port), cmd]
-    outer_timeout = config.PORT_WAIT_TIMEOUT + 30
+    # Outer wall-clock budget: the bash loop is bounded by wait_timeout
+    # internally, +60s buffer covers SSH handshake and any tail we tack
+    # on (diagnostic block, etc.).
+    outer_timeout = config.PORT_WAIT_TIMEOUT + 60
     try:
-        r = subprocess.run(
-            ssh_cmd, capture_output=True, text=True, timeout=outer_timeout
+        proc = subprocess.Popen(
+            ssh_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,  # line-buffered on the Python side
         )
-    except subprocess.TimeoutExpired:
-        return False, f"port {test_port} check timed out after {outer_timeout}s"
     except FileNotFoundError:
         return False, _SSH_BINARY_NOT_FOUND
-    combined = (r.stdout + r.stderr).strip()
-    return (r.returncode == 0), combined
+    assert proc.stdout is not None
+
+    # Hard wall-clock watchdog. Without this, `proc.stdout.readline()`
+    # blocks forever if the SSH transport is still up but the remote
+    # bash has hung (or the connection is silently half-closed). One
+    # such hang during an overnight run kept multiple pods alive for
+    # 12 hours and racked up real charges — never again.
+    timed_out_via_watchdog = [False]
+
+    def _kill_on_timeout() -> None:
+        timed_out_via_watchdog[0] = True
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+    watchdog = threading.Timer(outer_timeout, _kill_on_timeout)
+    watchdog.daemon = True
+    watchdog.start()
+
+    last_line = ""
+    try:
+        for raw in iter(proc.stdout.readline, ""):
+            line = raw.rstrip("\n")
+            if line:
+                if on_line is not None:
+                    on_line(line)
+                last_line = line
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    except Exception as e:  # pragma: no cover — defensive
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return False, f"port {test_port} check errored: {e}"
+    finally:
+        watchdog.cancel()
+
+    if timed_out_via_watchdog[0]:
+        return (
+            False,
+            f"port {test_port} check wall-clock timeout after {outer_timeout}s "
+            "(remote SSH/bash hung)",
+        )
+    return (proc.returncode == 0), last_line
 
 
 def run_port_proxy_check(
@@ -492,8 +566,14 @@ def run_jupyter_proxy_check(pod_id: str) -> tuple[bool, str]:
         f"https://{pod_id}-8888.proxy.runpod.net/api/status"
         f"?token={config.JUPYTER_TEST_PASSWORD}"
     )
+    # Same URL with the token stripped — used in log lines so we never
+    # write the bearer token to stdout / CI logs. The real `url` (with
+    # token) only ever goes to urlopen.
+    redacted_url = (
+        f"https://{pod_id}-8888.proxy.runpod.net/api/status?token=<redacted>"
+    )
     deadline = time.monotonic() + config.JUPYTER_PROXY_TIMEOUT
-    lines = [f"GET {url}"]
+    lines = [f"GET {redacted_url}"]
     last_err = ""
     attempt = 0
     while time.monotonic() < deadline:
@@ -567,6 +647,50 @@ def _gpu_smi_block(image: str) -> str:
     return ""
 
 
+def _runtime_state_block(tail: int) -> str:
+    """Shell snippet that dumps in-container runtime state useful for
+    diagnosing port-check failures:
+
+      * top processes (so we can see if main.py is still running, stuck in
+        cp -r, or already gone)
+      * listening TCP ports (so we can distinguish "ComfyUI never bound" from
+        "ComfyUI bound but firewalled/CORS-wedged"; ss prints the owning pid
+        so we link a port back to a process)
+      * size of /workspace/runpod-slim/ComfyUI (the first-boot cp -r of
+        ~8 GB is the biggest single warmup cost — knowing it's still growing
+        vs already done resolves "is it stuck or just slow" instantly)
+      * tails of side-server logs (start.sh redirects jupyter/filebrowser
+        stdout there; ComfyUI's own stdout goes to PID 1 stdout which we
+        can't read from another process, hence no comfy.log tail — see ps).
+    """
+    return (
+        "echo '=== ps (top 25 by RSS) ==='; "
+        "ps -eo pid,ppid,stat,rss,etime,cmd --sort=-rss --no-headers 2>/dev/null "
+        "  | head -n 25 || ps aux 2>&1 | head -n 25; "
+        "echo '=== listening TCP ports ==='; "
+        "if command -v ss >/dev/null 2>&1; then "
+        "  ss -tlnp 2>&1 | head -n 30; "
+        "elif command -v netstat >/dev/null 2>&1; then "
+        "  netstat -tlnp 2>&1 | head -n 30; "
+        "else "
+        "  echo '(neither ss nor netstat available)'; "
+        "fi; "
+        "echo '=== ComfyUI workspace state ==='; "
+        "if [ -d /workspace/runpod-slim/ComfyUI ]; then "
+        "  du -sh /workspace/runpod-slim/ComfyUI 2>/dev/null "
+        "    || echo '(du failed)'; "
+        "  ls /workspace/runpod-slim/ComfyUI/.venv-cu128 >/dev/null 2>&1 "
+        "    && echo 'venv: present' || echo 'venv: NOT yet created'; "
+        "else "
+        "  echo '(workspace ComfyUI dir not yet populated -- still in cp -r?)'; "
+        "fi; "
+        f"echo '=== last {tail} lines of /jupyter.log ==='; "
+        f"tail -n {tail} /jupyter.log 2>/dev/null || echo '(no /jupyter.log)'; "
+        f"echo '=== last {tail} lines of /filebrowser.log ==='; "
+        f"tail -n {tail} /filebrowser.log 2>/dev/null || echo '(no /filebrowser.log)'; "
+    )
+
+
 def fetch_logs_via_ssh(
     host: str, port: int, image: str, tail: int = 20,
 ) -> Optional[str]:
@@ -592,6 +716,7 @@ def fetch_logs_via_ssh(
         "  echo \"--- $f ---\"; tail -n 5 \"$f\" 2>/dev/null; "
         "done; "
         + _gpu_smi_block(image)
+        + _runtime_state_block(tail)
     )
     cmd = [*_ssh_command_prefix(host, port), remote_cmd]
     try:

@@ -12,6 +12,8 @@ on:
 jobs:
   dev:
     runs-on: blacksmith-8vcpu-ubuntu-2204
+    outputs:
+      image-refs: ${{ steps.refs.outputs.refs }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -37,22 +39,41 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push CUDA 13.0 dev image
+        id: build
         uses: docker/bake-action@v5
         with:
           push: ${{ inputs.push }}
           files: ./docker-bake.hcl
           targets: |
             devpush-cuda13
-
-      - name: Clean up Docker build cache
-        run: |
-          docker builder prune -af --filter "until=1h"
-          docker system prune -af --volumes
-
-      - name: Build and push regular dev image
-        uses: docker/bake-action@v5
-        with:
-          push: ${{ inputs.push }}
-          files: ./docker-bake.hcl
-          targets: |
             devpush
+
+      - name: Extract image refs
+        id: refs
+        uses: ./.github/actions/image-name
+        with:
+          bake-metadata: ${{ steps.build.outputs.metadata }}
+
+  test-dev:
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    needs: dev
+    if: needs.dev.result == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Smoke test
+        uses: ./.github/actions/smoke-test
+        with:
+          image-refs: ${{ needs.dev.outputs.image-refs }}
+          profile: base
+          runpod-api-key: ${{ secrets.TESTING_RUNPOD_API_KEY }}
+          ssh-private-key: ${{ secrets.TESTING_RUNPOD_SSH_PRIVATE_KEY }}
+          test-jupyter: true
+          on-skip: "warn"
+          check_all_gpu: true
+          test_ports: |
+            - 8188
+            - 8080

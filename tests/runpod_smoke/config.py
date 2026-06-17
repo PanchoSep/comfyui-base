@@ -89,11 +89,27 @@ STALL_HINT_AFTER = int(os.environ.get("STALL_HINT_AFTER", "180"))
 REGISTRY_AUTH_ID = os.environ.get("REGISTRY_AUTH_ID", "")
 REGISTRY_AUTH_NAME = os.environ.get("REGISTRY_AUTH_NAME", "")
 
-# All pods we create carry this absolute deadline so anything we leak
-# (e.g. crash before cleanup) auto-terminates within 2h.
-AUTO_TERMINATE = (datetime.now(timezone.utc) + timedelta(hours=2)).strftime(
-    "%Y-%m-%dT%H:%M:%SZ"
-)
+# Every pod we create carries this absolute deadline so anything we
+# leak (crash before cleanup, hung SSH, KeyboardInterrupt without
+# cleanup, …) auto-terminates within AUTO_TERMINATE_HOURS hours.
+#
+# NB: this MUST be recomputed per-pod, not once at module import.
+# Earlier we stored a module-level constant (`AUTO_TERMINATE = now+2h`),
+# which silently expired after the first 2h of any long-running session:
+# all pods created later got a `--terminate-after` timestamp IN THE
+# PAST, which RunPod accepts without complaint but never acts on, and
+# the pods kept burning credits until the user noticed. After a single
+# overnight run that cost real money this was changed to a function.
+AUTO_TERMINATE_HOURS = int(os.environ.get("AUTO_TERMINATE_HOURS", "2"))
+
+
+def auto_terminate_deadline() -> str:
+    """Return an RFC3339 'Z' timestamp AUTO_TERMINATE_HOURS hours from
+    NOW. Always call this at pod-create time — never cache the result.
+    """
+    return (
+        datetime.now(timezone.utc) + timedelta(hours=AUTO_TERMINATE_HOURS)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------------------------------------------------------------------------
@@ -149,20 +165,25 @@ JUPYTER_PROXY_TIMEOUT = int(os.environ.get("JUPYTER_PROXY_TIMEOUT", "60"))
 # ---------------------------------------------------------------------------
 
 # How long (seconds) to wait for the `test_ports` HTTP probe to come
-# back with an HTTP <500 response. Sized for the worst observed first-
-# boot we care about: ComfyUI binds 8188 in ~3 seconds but its HTTP
-# handler stays unresponsive for ~90s while ComfyUI-Manager runs FETCH
-# ComfyRegistry on first boot. With a tighter value the curl shot races
-# against the FETCH and flakes. Fast apps (Jupyter, FileBrowser) still
-# exit the unified retry loop in <2 seconds — this only costs time on
-# apps that actually need it.
+# back with an HTTP <500 response. Default is sized for the common case
+# (fast apps like Jupyter/FileBrowser bind in <2s and exit the retry
+# loop immediately). For slow-cold-start apps, override via env:
+#
+#   PORT_WAIT_TIMEOUT=900 python3 tests/test_images.py manifest.yaml
+#
+# Notable case requiring the bump: ComfyUI starting from a fresh
+# container disk (no network volume reuse) does cp -r ~8 GB into
+# /workspace inside overlay2 (2-7 min), then venv + torch imports +
+# ComfyUI-Manager FETCH (~90s on first boot). Tail easily reaches
+# 8-10 minutes on a slow host -- 900s gives comfortable headroom.
 PORT_WAIT_TIMEOUT = int(os.environ.get("PORT_WAIT_TIMEOUT", "300"))
 
 # Same role as JUPYTER_PROXY_TIMEOUT but for `test_ports`. Kept separate
 # so the Jupyter-specific knob can stay tighter (Jupyter responds fast
 # once bound) without making us impatient with slower-to-boot apps.
-# Matches PORT_WAIT_TIMEOUT — the proxy probe is also vulnerable to
-# long warm-up windows during ComfyUI-Manager FETCH.
+# Same override pattern as PORT_WAIT_TIMEOUT — bump together for slow
+# apps (proxy probe runs AFTER in-pod probe confirms the server is up,
+# but RunPod's proxy is eventually-consistent and can lag by ~10-30s).
 PORT_PROXY_TIMEOUT = int(os.environ.get("PORT_PROXY_TIMEOUT", "300"))
 
 

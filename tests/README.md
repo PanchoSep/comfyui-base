@@ -367,8 +367,8 @@ pytorch:
 | `RUNPOD_SSH_KEY` | _(empty)_ | Path to private key matching the `PUBLIC_KEY` `runpodctl` injects into pods. Auto-discovered from common locations if not set. |
 | `JUPYTER_WAIT_TIMEOUT` | `30` | Seconds the in-pod Jupyter probe waits for `:8888` to bind. |
 | `JUPYTER_PROXY_TIMEOUT` | `60` | Seconds the proxy probe retries while RunPod's ingress registers the new pod. |
-| `PORT_WAIT_TIMEOUT` | `120` | Seconds the in-pod `test_ports` probe waits for a port to start listening on `127.0.0.1`. Higher default than `JUPYTER_WAIT_TIMEOUT` because apps like ComfyUI can take ~30-60s on first boot (model downloads, ComfyUI-Manager init). |
-| `PORT_PROXY_TIMEOUT` | `120` | Seconds the public-proxy `test_ports` probe retries waiting for RunPod's ingress to register the new pod. Same role as `JUPYTER_PROXY_TIMEOUT` but for generic ports. |
+| `PORT_WAIT_TIMEOUT` | `300` | Seconds the in-pod `test_ports` probe waits for a port to bind on `127.0.0.1` AND return an HTTP `<500` response (single unified retry loop, heartbeat every 30s). Fast apps (Jupyter, FileBrowser) exit in <2s. Bump to `900` for ComfyUI cold starts — first-boot `cp -r` of ~8 GB into `/workspace` plus ComfyUI-Manager FETCH can push readiness past 5 minutes. |
+| `PORT_PROXY_TIMEOUT` | `300` | Seconds the public-proxy `test_ports` probe retries waiting for RunPod's ingress to register the new pod. Same override pattern as `PORT_WAIT_TIMEOUT` — bump together when testing slow apps. |
 
 
 ## Functional check
@@ -421,14 +421,16 @@ tool for ComfyUI (`8188`), FileBrowser (`8080`), Tensorboard, etc.
 
 For every port in the list, two probes run in sequence (both must pass):
 
-1. **In-pod.** SSH in, poll `/dev/tcp/127.0.0.1/<port>` for up to
-   `PORT_WAIT_TIMEOUT` seconds, then `curl http://127.0.0.1:<port>/` —
-   capture the HTTP status code. Catches "service never started",
-   "service died on first request", and "service bound to a non-loopback
-   interface". The probe **accepts any HTTP status `<500`**: 200, 301,
-   401, 403 all count as success because they prove the server is
-   alive — many apps return 401/403 on `/` without auth and that's
-   still a "the service is up" signal we want to see.
+1. **In-pod.** SSH in and run a single unified retry loop for up to
+   `PORT_WAIT_TIMEOUT` seconds: at each iteration probe `/dev/tcp/127.0.0.1/<port>`
+   for binding, and if the port is open also try `curl http://127.0.0.1:<port>/`.
+   The probe **accepts any HTTP status `<500`** (200, 301, 401, 403 all
+   prove the server is alive — many apps return 401/403 on `/` without
+   auth and that's still a "the service is up" signal we want to see).
+   Output streams live to the host with a heartbeat every 30s so long
+   warm-up windows (ComfyUI cold start, etc.) don't look frozen.
+   Catches "service never started", "service died on first request",
+   and "service bound to a non-loopback interface".
 2. **Public proxy.** From the test machine, `GET
    https://<pod-id>-<port>.proxy.runpod.net/`. Same `<500` acceptance
    criterion. Catches the most common end-user-facing failure mode:

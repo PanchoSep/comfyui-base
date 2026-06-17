@@ -274,13 +274,17 @@ def _run_port_steps(
             f"running port check (in-pod) for {tp} in group '{group}'...",
             indent=2,
         )
-        ok, output = run_port_check(host, port, tp)
-        for line in (output or "").splitlines():
-            log(f"  {line}", indent=2)
+        # Stream bash output live (heartbeat every 30s) so the operator
+        # sees the probe is alive during the long warm-up window. Without
+        # this the run looks frozen for up to PORT_WAIT_TIMEOUT seconds.
+        ok, last_line = run_port_check(
+            host, port, tp,
+            on_line=lambda line: log(f"  {line}", indent=2),
+        )
         if not ok:
             log(
                 f"port {tp} check (in-pod) FAILED -- "
-                "service didn't bind or returned HTTP 5xx",
+                f"{last_line or 'service did not bind / returned HTTP 5xx'}",
                 indent=2,
             )
             dump_pod_logs(pod_id, image)
