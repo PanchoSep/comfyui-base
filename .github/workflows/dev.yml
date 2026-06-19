@@ -142,7 +142,6 @@ jobs:
           ssh-private-key: ${{ secrets.TESTING_RUNPOD_SSH_PRIVATE_KEY }}
           test-jupyter: true
           on-skip: "warn"
-          check_all_gpu: true
           test_ports: |
             - 8188
             - 8080
