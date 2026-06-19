@@ -39,20 +39,56 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push CUDA 13.0 dev image
-        id: build
+        id: build-cuda13
         uses: docker/bake-action@v5
         with:
           push: ${{ inputs.push }}
           files: ./docker-bake.hcl
           targets: |
             devpush-cuda13
+
+      - name: Extract image refs
+        id: refs-cuda13
+        uses: ./.github/actions/image-name
+        with:
+          bake-metadata: ${{ steps.build-cuda13.outputs.metadata }}
+
+      - name: Clean up Docker build cache
+        run: |
+          docker builder prune -af --filter "until=1h"
+          docker system prune -af --volumes
+
+      - name: Build and push regular dev image
+        id: build-regular
+        uses: docker/bake-action@v5
+        with:
+          push: ${{ inputs.push }}
+          files: ./docker-bake.hcl
+          targets: |
             devpush
 
       - name: Extract image refs
-        id: refs
+        id: refs-regular
         uses: ./.github/actions/image-name
         with:
-          bake-metadata: ${{ steps.build.outputs.metadata }}
+          bake-metadata: ${{ steps.build-regular.outputs.metadata }}
+
+      - name: Combine image refs
+        id: refs
+        shell: bash
+        env:
+          CUDA13_REFS: ${{ steps.refs-cuda13.outputs.refs }}
+          REGULAR_REFS: ${{ steps.refs-regular.outputs.refs }}
+        run: |
+          set -euo pipefail
+          REFS=$(jq -c -n \
+            --argjson cuda13 "${CUDA13_REFS}" \
+            --argjson regular "${REGULAR_REFS}" \
+            '$cuda13 + $regular | unique')
+          echo "refs=${REFS}" >> "${GITHUB_OUTPUT}"
+          echo "Combined image refs:"
+          echo "${REFS}" | jq -r '.[]'
+
 
   test-dev:
     runs-on: blacksmith-4vcpu-ubuntu-2204
