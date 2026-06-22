@@ -100,7 +100,7 @@ jobs:
           targets: |
             regular
 
-     - name: Extract image refs
+      - name: Extract image refs
         id: refs-regular
         uses: ./.github/actions/image-name
         with:
@@ -127,7 +127,6 @@ jobs:
           echo "${REFS}" | jq -r '.[]'
 
       - name: Upload image refs artifact
-        if: inputs.push == true
         uses: actions/upload-artifact@v4
         with:
           name: dev-image-refs
@@ -143,7 +142,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          
+
       - name: Download image refs artifact
         uses: actions/download-artifact@v4
         with:
