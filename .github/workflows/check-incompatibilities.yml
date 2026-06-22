@@ -8,6 +8,13 @@ on:
         type: string
         required: true
         default: "runpod/comfyui:cuda13.0"
+  pull_request:
+    inputs:
+      image:
+        description: "Image to check"
+        type: string
+        required: true
+        default: "runpod/comfyui:cuda13.0"
 
 jobs:
   check-incompatibilities:
