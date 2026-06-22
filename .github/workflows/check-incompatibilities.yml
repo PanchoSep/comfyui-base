@@ -8,17 +8,6 @@ on:
         type: string
         required: true
         default: "runpod/comfyui:cuda13.0"
-  # TEMP — remove this whole `pull_request:` block once the job is verified.
-  # It exists only so the workflow can be exercised from a PR before it's on
-  # the default branch (workflow_dispatch isn't offered until then). Note
-  # pull_request does NOT support `inputs:` (only workflow_dispatch /
-  # workflow_call do), so on a PR event `inputs.image` is empty and the
-  # "Resolve image ref(s)" step below falls back to the default image.
-  pull_request:
-    paths:
-      - ".github/workflows/check-incompatibilities.yml"
-      - ".github/actions/smoke-test/**"
-      - "tests/**"
 
 jobs:
   check-incompatibilities:
@@ -29,23 +18,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve image ref(s)
-        id: img
-        shell: bash
-        env:
-          # Only set on workflow_dispatch; empty on pull_request.
-          IMAGE: ${{ inputs.image }}
-        run: |
-          set -euo pipefail
-          IMAGE="${IMAGE:-runpod/comfyui:cuda13.0}"
-          # smoke-test expects image-refs as a JSON array, not a bare ref.
-          printf 'refs=["%s"]\n' "${IMAGE}" >> "${GITHUB_OUTPUT}"
-          echo "Checking image: ${IMAGE}"
-
       - name: Check incompatibilities
         uses: ./.github/actions/smoke-test
         with:
-          image-refs: ${{ steps.img.outputs.refs }}
+          # smoke-test expects image-refs as a JSON array, so wrap the single
+          # input ref. inputs.image is always set here.
+          image-refs: ${{ format('["{0}"]', inputs.image) }}
           profile: base
           runpod-api-key: ${{ secrets.TESTING_RUNPOD_API_KEY }}
           ssh-private-key: ${{ secrets.TESTING_RUNPOD_SSH_PRIVATE_KEY }}
