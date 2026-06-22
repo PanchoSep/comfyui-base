@@ -10,7 +10,7 @@ on:
         default: "runpod/comfyui:cuda13.0"
 
 jobs:
-  dev:
+  check-incompatibilities:
     runs-on: blacksmith-8vcpu-ubuntu-2204
     steps:
       - name: Checkout
