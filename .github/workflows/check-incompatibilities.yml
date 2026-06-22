@@ -1,0 +1,33 @@
+name: Check Incompatibilities
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image to check"
+        type: string
+        required: true
+        default: "runpod/comfyui:cuda13.0"
+
+jobs:
+  dev:
+    runs-on: blacksmith-8vcpu-ubuntu-2204
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check incompatibilities
+        uses: ./.github/actions/smoke-test
+        with:
+          image-refs: ${{ inputs.image }}
+          profile: base
+          runpod-api-key: ${{ secrets.TESTING_RUNPOD_API_KEY }}
+          ssh-private-key: ${{ secrets.TESTING_RUNPOD_SSH_PRIVATE_KEY }}
+          test-jupyter: true
+          test-all-gpu: true
+          manufacturer: Nvidia
+          test_ports: |
+            - 8188
+            - 8080

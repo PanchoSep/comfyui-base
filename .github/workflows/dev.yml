@@ -112,6 +112,10 @@ jobs:
     needs: dev
     if: needs.dev.result == 'success' && inputs.push == true
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Download image refs artifact
         uses: actions/download-artifact@v4
