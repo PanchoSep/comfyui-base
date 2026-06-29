@@ -95,14 +95,14 @@ RUN cat ComfyUI/requirements.txt > requirements.in && \
     echo "jupyter" >> requirements.in && \
     echo "jupyter-resource-usage" >> requirements.in && \
     echo "jupyterlab-nvdashboard" >> requirements.in && \
-    echo "torch==${TORCH_VERSION}" >> constraints.txt && \
-    echo "torchvision==${TORCHVISION_VERSION}" >> constraints.txt && \
-    echo "torchaudio==${TORCHAUDIO_VERSION}" >> constraints.txt && \
-    echo "pillow>=12.1.1" >> constraints.txt && \
+    sed -i '/^torch$/d;/^torchvision$/d;/^torchaudio$/d' requirements.in && \
+    echo "torch==${TORCH_VERSION}" >> requirements.in && \
+    echo "torchvision==${TORCHVISION_VERSION}" >> requirements.in && \
+    echo "torchaudio==${TORCHAUDIO_VERSION}" >> requirements.in && \
+    echo "pillow>=12.1.1" >> requirements.in && \
     TORCH_INDEX_URL="https://download.pytorch.org/whl/${TORCH_INDEX_SUFFIX}" && \
     PIP_INDEX_URL=https://pypi.org/simple \
     PIP_EXTRA_INDEX_URL="${TORCH_INDEX_URL}" \
-    PIP_CONSTRAINT=constraints.txt \
     pip-compile --generate-hashes --output-file=requirements.lock --strip-extras --allow-unsafe requirements.in && \
     python3.12 -m pip install --no-cache-dir --ignore-installed --require-hashes \
     --index-url https://pypi.org/simple \
