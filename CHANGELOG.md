@@ -36,6 +36,7 @@ On each release (e.g. `2.0.0`):
 
 - Centralized version pinning in `docker-bake.hcl` (single source of truth for ComfyUI, custom node SHAs, PyTorch, FileBrowser).
 - Hash-verified dependency lock file generated at build time via `pip-compile --generate-hashes`.
+- Build-time validation that the installed `torch`, `torchvision`, and `torchaudio` distributions match the CUDA-specific pins.
 - `scripts/fetch-hashes.sh` to query GitHub API for latest custom node commit SHAs.
 - `scripts/prebake-manager-cache.py` to pre-populate ComfyUI-Manager cache at build time, reducing cold start time.
 - ComfyUI-RunpodDirect added as a pre-installed custom node.
@@ -43,6 +44,10 @@ On each release (e.g. `2.0.0`):
 - FileBrowser pinned to a specific version with SHA256 checksum verification.
 - PyTorch 2.10.0 + torchvision 0.25.0 + torchaudio 2.10.0 for both images.
 - Separate PyTorch version pins for regular and CUDA 13.0 images so versions can diverge independently.
+
+### Fixed
+
+- Runtime pip operations now inherit a baked constraint file for the CUDA-specific PyTorch stack, preventing CUDA 12.8 images from accidentally upgrading to newer `cu130` PyTorch wheels during legacy venv migration or custom-node dependency installs.
 
 ### Removed
 
