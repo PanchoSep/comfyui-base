@@ -95,7 +95,7 @@ RUN cat ComfyUI/requirements.txt > requirements.in && \
     echo "jupyter" >> requirements.in && \
     echo "jupyter-resource-usage" >> requirements.in && \
     echo "jupyterlab-nvdashboard" >> requirements.in && \
-    sed -i '/^torch$/d;/^torchvision$/d;/^torchaudio$/d' requirements.in && \
+    sed -i -E '/^[[:space:]]*(torch|torchvision|torchaudio)([[:space:]]|[\[<>=!~;#]|$)/d' requirements.in && \
     echo "torch==${TORCH_VERSION}" >> requirements.in && \
     echo "torchvision==${TORCHVISION_VERSION}" >> requirements.in && \
     echo "torchaudio==${TORCHAUDIO_VERSION}" >> requirements.in && \
