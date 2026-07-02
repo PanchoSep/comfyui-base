@@ -4,19 +4,31 @@ variable "TAG" {
 
 # === Version Pins (single source of truth) ===
 variable "COMFYUI_VERSION" {
-  default = "v0.26.2"
+  default = "v0.27.0"
 }
 variable "MANAGER_SHA" {
-  default = "c352b16bb186"
+  default = "8e06ee6552a7"
 }
 variable "KJNODES_SHA" {
-  default = "bc8e4ce4254b"
+  default = "e27a505b3ba6"
 }
 variable "CIVICOMFY_SHA" {
   default = "555e984bbcb0"
 }
 variable "RUNPODDIRECT_SHA" {
   default = "809065c9d2f3"
+}
+variable "INT8FAST_SHA" {
+  default = "48a88b2fde88"
+}
+variable "CONTROLALTAI_SHA" {
+  default = "721492b66c9c"
+}
+variable "CRTNODES_SHA" {
+  default = "c0798d356bc3"
+}
+variable "LOGIN_SHA" {
+  default = "3f09fcbd5e18"
 }
 # Regular image (cu128)
 variable "TORCH_VERSION" {
@@ -60,6 +72,10 @@ target "common" {
     KJNODES_SHA         = KJNODES_SHA
     CIVICOMFY_SHA       = CIVICOMFY_SHA
     RUNPODDIRECT_SHA    = RUNPODDIRECT_SHA
+    INT8FAST_SHA        = INT8FAST_SHA
+    CONTROLALTAI_SHA    = CONTROLALTAI_SHA
+    CRTNODES_SHA        = CRTNODES_SHA
+    LOGIN_SHA           = LOGIN_SHA
     TORCH_VERSION       = TORCH_VERSION
     TORCHVISION_VERSION = TORCHVISION_VERSION
     TORCHAUDIO_VERSION  = TORCHAUDIO_VERSION
@@ -83,7 +99,10 @@ target "regular" {
 # Dev image for local testing
 target "dev" {
   inherits = ["common"]
-  tags = ["runpod/comfyui:dev"]
+  tags = [
+    "runpod/comfyui:dev",
+    "ghcr.io/panchosep/comfyui-redcraft:dev",
+  ]
   output = ["type=docker"]
 }
 

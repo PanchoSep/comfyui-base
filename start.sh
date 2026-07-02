@@ -135,6 +135,113 @@ nohup filebrowser &> /filebrowser.log &
 
 start_jupyter
 
+# ---------------------------------------------------------------------------- #
+#  Sync Setup — SSH key + rclone + background sync loop (env-var driven)       #
+# ---------------------------------------------------------------------------- #
+# Controlled entirely by environment variables. If VPS_HOST and VPS_OUTPUT_PATH
+# are set, SSH key and rclone are configured and a background sync loop starts.
+# Otherwise, this section is a no-op.
+setup_sync() {
+    VPS_USER="${VPS_USER:-root}"
+    VPS_PORT="${VPS_PORT:-22}"
+    SYNC_INTERVAL="${SYNC_INTERVAL:-120}"
+    NV_DIR="${NETWORK_VOLUME:-/workspace}"
+    SSH_KEY_NV="$NV_DIR/ssh/id_ed25519"
+    SSH_KEY="/tmp/id_ed25519_sync"
+    RCLONE_CONF="$NV_DIR/rclone.conf"
+    RCLONE_REMOTE="vps"
+
+    # Nothing to do if VPS host or output path not configured
+    if [ -z "${VPS_HOST:-}" ] || [ -z "${VPS_OUTPUT_PATH:-}" ]; then
+        echo "Sync: VPS_HOST or VPS_OUTPUT_PATH not set — skipping sync setup"
+        return 0
+    fi
+
+    echo "============================================="
+    echo "  Sync: Configuring → ${VPS_USER}@${VPS_HOST}:${VPS_OUTPUT_PATH}"
+    echo "============================================="
+
+    # Ensure rclone is available
+    if ! command -v rclone &>/dev/null; then
+        echo "Sync: Installing rclone..."
+        apt-get update -qq && apt-get install -y -qq rclone 2>/dev/null
+    fi
+
+    # SSH key: 3-tier priority
+    #   1. SYNC_SSH_KEY env var (pre-generated, pre-authorized on VPS)
+    #   2. Existing key in persistent storage
+    #   3. Generate new key (requires manual authorization on VPS)
+    mkdir -p "$NV_DIR/ssh"
+
+    if [ -n "${SYNC_SSH_KEY:-}" ]; then
+        echo "Sync: Using SSH key from SYNC_SSH_KEY env var"
+        echo "$SYNC_SSH_KEY" | base64 -d > "$SSH_KEY_NV"
+        chmod 600 "$SSH_KEY_NV"
+        # Regenerate .pub in case it's missing
+        ssh-keygen -y -f "$SSH_KEY_NV" > "${SSH_KEY_NV}.pub" 2>/dev/null
+    elif [ -f "$SSH_KEY_NV" ]; then
+        echo "Sync: Using existing SSH key from $SSH_KEY_NV"
+    else
+        echo "Sync: Generating new SSH ed25519 key..."
+        ssh-keygen -t ed25519 -f "$SSH_KEY_NV" -N "" -C "comfyui-sync" -q
+        PUBKEY=$(cat "${SSH_KEY_NV}.pub")
+        echo ""
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║  SYNC: Authorize this key on your VPS               ║"
+        echo "╠══════════════════════════════════════════════════════╣"
+        echo "║  Run on VPS (${VPS_HOST}):"
+        echo "║  echo '${PUBKEY}' >> ~/.ssh/authorized_keys"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo ""
+    fi
+
+    # Copy to /tmp (persistent storage may not support chmod)
+    cp "$SSH_KEY_NV" "$SSH_KEY"
+    chmod 600 "$SSH_KEY"
+
+    # Test SSH connection (non-fatal)
+    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        -o BatchMode=yes -p "$VPS_PORT" "${VPS_USER}@${VPS_HOST}" "echo ok" &>/dev/null; then
+        echo "Sync: SSH connection to VPS verified ✓"
+    else
+        echo "Sync: WARNING — Cannot SSH to VPS (key may not be authorized yet)"
+        echo "Sync: Loop will start but syncs will fail until key is authorized"
+    fi
+
+    # Configure rclone
+    rclone config delete "$RCLONE_REMOTE" --config "$RCLONE_CONF" -q 2>/dev/null || true
+    rclone config create "$RCLONE_REMOTE" sftp \
+        host "$VPS_HOST" \
+        user "$VPS_USER" \
+        port "$VPS_PORT" \
+        key_file "$SSH_KEY" \
+        shell_type unix \
+        --config "$RCLONE_CONF" -q 2>&1
+
+    rclone --config "$RCLONE_CONF" mkdir "${RCLONE_REMOTE}:${VPS_OUTPUT_PATH#/}" 2>/dev/null || true
+    echo "Sync: rclone configured (${RCLONE_REMOTE}:${VPS_OUTPUT_PATH})"
+
+    # Start background sync loop
+    echo "Sync: Starting background sync loop every ${SYNC_INTERVAL}s..."
+    (
+        while true; do
+            sleep "$SYNC_INTERVAL"
+            rclone --config "$RCLONE_CONF" sync \
+                "$COMFYUI_DIR/output" \
+                "${RCLONE_REMOTE}:${VPS_OUTPUT_PATH#/}" \
+                --transfers 4 --checkers 8 \
+                --ignore-existing \
+                2>&1 | while IFS= read -r line; do
+                    echo "[sync] $line"
+                done
+        done
+    ) &
+    echo "Sync: Background sync PID: $!"
+}
+
+setup_sync
+echo ""
+
 # Create default comfyui_args.txt if it doesn't exist
 ARGS_FILE="/workspace/runpod-slim/comfyui_args.txt"
 if [ ! -f "$ARGS_FILE" ]; then
@@ -156,7 +263,7 @@ if [ -d "$OLD_VENV_DIR" ] && [ ! -d "$VENV_DIR" ]; then
     source "$VENV_DIR/bin/activate"
     python -m ensurepip
     # Skip nodes baked into the image — their deps are in system site-packages
-    BAKED_NODES="ComfyUI-Manager ComfyUI-KJNodes Civicomfy ComfyUI-RunpodDirect"
+    BAKED_NODES="ComfyUI-Manager ComfyUI-KJNodes Civicomfy ComfyUI-RunpodDirect ComfyUI-INT8-Fast ControlAltAI-Nodes CRT-Nodes ComfyUI-Login"
     CURRENT=0
     INSTALLED=0
     for req in "$COMFYUI_DIR"/custom_nodes/*/requirements.txt; do

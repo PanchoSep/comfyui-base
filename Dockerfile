@@ -11,6 +11,10 @@ ARG MANAGER_SHA
 ARG KJNODES_SHA
 ARG CIVICOMFY_SHA
 ARG RUNPODDIRECT_SHA
+ARG INT8FAST_SHA
+ARG CONTROLALTAI_SHA
+ARG CRTNODES_SHA
+ARG LOGIN_SHA
 ARG TORCH_VERSION
 ARG TORCHVISION_VERSION
 ARG TORCHAUDIO_VERSION
@@ -62,7 +66,15 @@ RUN curl -fSL "https://github.com/ltdrdata/ComfyUI-Manager/archive/${MANAGER_SHA
     curl -fSL "https://github.com/MoonGoblinDev/Civicomfy/archive/${CIVICOMFY_SHA}.tar.gz" -o civicomfy.tar.gz && \
     mkdir -p Civicomfy && tar xzf civicomfy.tar.gz --strip-components=1 -C Civicomfy && rm civicomfy.tar.gz && \
     curl -fSL "https://github.com/MadiatorLabs/ComfyUI-RunpodDirect/archive/${RUNPODDIRECT_SHA}.tar.gz" -o runpoddirect.tar.gz && \
-    mkdir -p ComfyUI-RunpodDirect && tar xzf runpoddirect.tar.gz --strip-components=1 -C ComfyUI-RunpodDirect && rm runpoddirect.tar.gz
+    mkdir -p ComfyUI-RunpodDirect && tar xzf runpoddirect.tar.gz --strip-components=1 -C ComfyUI-RunpodDirect && rm runpoddirect.tar.gz && \
+    curl -fSL "https://github.com/BobJohnson24/ComfyUI-INT8-Fast/archive/${INT8FAST_SHA}.tar.gz" -o int8fast.tar.gz && \
+    mkdir -p ComfyUI-INT8-Fast && tar xzf int8fast.tar.gz --strip-components=1 -C ComfyUI-INT8-Fast && rm int8fast.tar.gz && \
+    curl -fSL "https://github.com/gseth/ControlAltAI-Nodes/archive/${CONTROLALTAI_SHA}.tar.gz" -o controlaltai.tar.gz && \
+    mkdir -p ControlAltAI-Nodes && tar xzf controlaltai.tar.gz --strip-components=1 -C ControlAltAI-Nodes && rm controlaltai.tar.gz && \
+    curl -fSL "https://github.com/PGCRT/CRT-Nodes/archive/${CRTNODES_SHA}.tar.gz" -o crtnodes.tar.gz && \
+    mkdir -p CRT-Nodes && tar xzf crtnodes.tar.gz --strip-components=1 -C CRT-Nodes && rm crtnodes.tar.gz && \
+    curl -fSL "https://github.com/liusida/ComfyUI-Login/archive/${LOGIN_SHA}.tar.gz" -o login.tar.gz && \
+    mkdir -p ComfyUI-Login && tar xzf login.tar.gz --strip-components=1 -C ComfyUI-Login && rm login.tar.gz
 
 # Init git repos with upstream remotes so ComfyUI-Manager can detect versions
 # and users can update via Manager at their own risk
@@ -80,14 +92,26 @@ RUN cd /tmp/build/ComfyUI && \
     git remote add origin https://github.com/MoonGoblinDev/Civicomfy.git && \
     cd /tmp/build/ComfyUI/custom_nodes/ComfyUI-RunpodDirect && \
     git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "ComfyUI-RunpodDirect ${RUNPODDIRECT_SHA}" && \
-    git remote add origin https://github.com/MadiatorLabs/ComfyUI-RunpodDirect.git
+    git remote add origin https://github.com/MadiatorLabs/ComfyUI-RunpodDirect.git && \
+    cd /tmp/build/ComfyUI/custom_nodes/ComfyUI-INT8-Fast && \
+    git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "ComfyUI-INT8-Fast ${INT8FAST_SHA}" && \
+    git remote add origin https://github.com/BobJohnson24/ComfyUI-INT8-Fast.git && \
+    cd /tmp/build/ComfyUI/custom_nodes/ControlAltAI-Nodes && \
+    git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "ControlAltAI-Nodes ${CONTROLALTAI_SHA}" && \
+    git remote add origin https://github.com/gseth/ControlAltAI-Nodes.git && \
+    cd /tmp/build/ComfyUI/custom_nodes/CRT-Nodes && \
+    git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "CRT-Nodes ${CRTNODES_SHA}" && \
+    git remote add origin https://github.com/PGCRT/CRT-Nodes.git && \
+    cd /tmp/build/ComfyUI/custom_nodes/ComfyUI-Login && \
+    git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "ComfyUI-Login ${LOGIN_SHA}" && \
+    git remote add origin https://github.com/liusida/ComfyUI-Login.git
 
 # Generate lock file from all requirements (including torch pins), then install with hash verification
 WORKDIR /tmp/build
-RUN cat ComfyUI/requirements.txt > requirements.in && \
+RUN (cat ComfyUI/requirements.txt; echo) > requirements.in && \
     for node_dir in ComfyUI/custom_nodes/*/; do \
         if [ -f "$node_dir/requirements.txt" ]; then \
-            cat "$node_dir/requirements.txt" >> requirements.in; \
+            (cat "$node_dir/requirements.txt"; echo) >> requirements.in; \
         fi; \
     done && \
     echo "GitPython" >> requirements.in && \
