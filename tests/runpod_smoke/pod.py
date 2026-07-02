@@ -1,7 +1,7 @@
 """Pod creation, lifecycle tracking, signal-safe cleanup, registry auth.
 
 Owns the `ACTIVE_POD_IDS` set + lock — the source of truth for "what's
-still alive on RunPod" across all workers. atexit + SIGINT/SIGTERM
+still alive on Runpod" across all workers. atexit + SIGINT/SIGTERM
 handlers are installed at import time so anything we leak on crash
 gets terminated.
 """
@@ -29,11 +29,11 @@ from .runpodctl import runpodctl, runpodctl_json
 # ---------------------------------------------------------------------------
 
 UNAVAILABLE_RE = re.compile(
-    # RunPod-specific phrasings observed in pod-create errors:
+    # Runpod-specific phrasings observed in pod-create errors:
     r"no\s+longer\s+any\s+instances\s+available"
     r"|please\s+refresh\s+and\s+try\s+again"
     # "This machine does not have the resources to deploy your pod. Please
-    # try a different machine" — RunPod returns this when a candidate host
+    # try a different machine" — Runpod returns this when a candidate host
     # was picked but couldn't actually fit the pod (vRAM, disk, CPU). Same
     # remediation as "no capacity": move on to the next instance type.
     r"|does\s+not\s+have\s+the\s+resources"
@@ -47,7 +47,7 @@ UNAVAILABLE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Generic "RunPod orchestrator hiccupped" errors that we should retry rather
+# Generic "Runpod orchestrator hiccupped" errors that we should retry rather
 # than treat as a real failure. These appear when several workers race for
 # the same scarce GPU at the same instant, or the API is just transiently
 # flaky.
@@ -191,7 +191,7 @@ def create_pod(
     compute_type='GPU' uses --gpu-id to target a specific GPU type (caller
     must pass a non-empty gpu_id).
     compute_type='CPU' creates a CPU pod. `runpodctl pod create` doesn't
-    accept a CPU-flavor flag, so RunPod picks the flavor based on
+    accept a CPU-flavor flag, so Runpod picks the flavor based on
     container disk size + selected cloud/DC. The caller varies CPU
     candidates by overriding `cloud_type` (SECURE vs COMMUNITY) and
     optionally `data_center_ids`. gpu_id is ignored in CPU mode.
@@ -215,7 +215,7 @@ def create_pod(
          takes effect — for explicit-CUDA tags, the manifest value is
          ignored even when set.
     The merged result is forwarded to `runpodctl --min-cuda-version` so
-    RunPod's scheduler only picks hosts whose driver supports it.
+    Runpod's scheduler only picks hosts whose driver supports it.
 
     `test_jupyter=True` expands the pod config so JupyterLab can be tested:
         - `--ports` gains `8888/http`
@@ -223,7 +223,7 @@ def create_pod(
           starting Jupyter)
 
     `test_ports` is the generic counterpart for non-Jupyter apps: each
-    entry is added to `--ports` as `<port>/http` so RunPod's public proxy
+    entry is added to `--ports` as `<port>/http` so Runpod's public proxy
     registers it. Duplicates (e.g. 8888 when test_jupyter is also true)
     are silently de-duped. Empty / None leaves the port list unchanged.
     """
@@ -258,13 +258,13 @@ def create_pod(
         args.extend(["--compute-type", "CPU"])
         # CPU images have no CUDA, no GPU — `--min-cuda-version` would be
         # nonsensical and `--gpu-id` is rejected by runpodctl for CPU pods.
-        # CPU flavor (vCPU/RAM tier) is chosen by RunPod from the
+        # CPU flavor (vCPU/RAM tier) is chosen by Runpod from the
         # selected cloud+DC's pool based on container disk size; we can't
         # request a specific tier with this subcommand.
     else:
         args.extend(["--gpu-id", gpu_id, "--gpu-count", "1"])
         # Constrain scheduling to hosts whose driver supports this image's
-        # CUDA. Without this, RunPod may land a cu13.0 image on an
+        # CUDA. Without this, Runpod may land a cu13.0 image on an
         # older-driver host and the container fails at startup with
         # `nvidia-container-cli: cuda>=13.0`. Image tag wins; the manifest
         # `min_cuda_version` is only consulted for opaque tags (NGC etc.).
@@ -342,7 +342,7 @@ def pod_status(pod_id: str) -> Optional[str]:
 _DIRECT_ERROR_FIELDS = ("lastError", "errorMessage", "statusMessage",
                         "lastStatusChange")
 
-# Same as above but expected on the nested `runtime` dict that RunPod
+# Same as above but expected on the nested `runtime` dict that Runpod
 # returns alongside top-level fields.
 _RUNTIME_ERROR_FIELDS = ("lastError", "errorMessage", "statusMessage")
 
@@ -372,7 +372,7 @@ def _collect_event_messages(target: list[str], events: object) -> None:
 
 
 def _gather_runtime_error_candidates(data: dict) -> list[str]:
-    """Walk every plausible place RunPod stuffs a runtime/pull error,
+    """Walk every plausible place Runpod stuffs a runtime/pull error,
     return a flat list of candidate lines. Doesn't filter — that's
     `pod_runtime_error`'s job."""
     runtime = data.get("runtime") or {}
@@ -415,7 +415,7 @@ _TERMINAL_DESIRED = {"EXITED", "FAILED", "DEAD", "TERMINATED"}
 def _print_stall_hint(pod_id: str, elapsed: int) -> None:
     """One-time hint for pods that sit with no SSH endpoint for too long.
 
-    RunPod doesn't surface pull progress via API/CLI, so this points the
+    Runpod doesn't surface pull progress via API/CLI, so this points the
     user at the UI plus the single most common root cause — Docker Hub
     rate-limiting an anonymous pull.
     """
@@ -477,10 +477,10 @@ def wait_for_running(pod_id: str) -> tuple[str, str]:
                     initializing (capacity issue or image broken).
 
     SSH probing is the real health-check now. We poll `pod get` to discover
-    ssh.ip / ssh.port (assigned by RunPod once a machine is allocated), then
+    ssh.ip / ssh.port (assigned by Runpod once a machine is allocated), then
     try `ssh root@ip -p port 'echo ready'` until it succeeds. This works
     because:
-      * `--ports 22/tcp` in pod create makes RunPod NAT a public port to the
+      * `--ports 22/tcp` in pod create makes Runpod NAT a public port to the
         container's 22, so the container's sshd is reachable from anywhere.
       * The PUBLIC_KEY env we inject lands in /root/.ssh/authorized_keys.
       * A successful SSH means the container booted + sshd started — the

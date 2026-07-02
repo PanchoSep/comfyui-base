@@ -489,7 +489,7 @@ def run_port_proxy_check(
     pod_id: str, test_port: int,
 ) -> tuple[bool, str]:
     """Hit `https://<pod-id>-<test_port>.proxy.runpod.net/` from the test
-    machine. Verifies the RunPod public proxy registered the port (only
+    machine. Verifies the Runpod public proxy registered the port (only
     `<port>/http` declarations get registered) AND the server actually
     answers end-to-end.
 
@@ -551,7 +551,7 @@ def run_jupyter_proxy_check(pod_id: str) -> tuple[bool, str]:
     """Hit `https://<pod-id>-8888.proxy.runpod.net/api/status?token=admin`
     from the test machine. Verifies that:
 
-      1. RunPod's public proxy has the pod registered for port 8888.
+      1. Runpod's public proxy has the pod registered for port 8888.
          If the port was exposed as `8888/tcp` instead of `8888/http`, the
          proxy never wires it up and this fails. The SSH-side check would
          still pass — that's exactly the kind of misconfiguration the

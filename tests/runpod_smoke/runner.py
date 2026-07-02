@@ -100,7 +100,7 @@ def _create_pod_with_retries(
     dc_ids = cpu_candidate.data_center_ids if cpu_candidate else ""
     raw = ""
     for attempt in range(1, config.CREATE_RETRIES + 1):
-        # New name on each attempt — RunPod may keep a server-side record
+        # New name on each attempt — Runpod may keep a server-side record
         # of rejected names briefly, and unique names also make logs
         # unambiguous.
         name = (
@@ -351,8 +351,8 @@ def test_pair(image: str, instance: str, group: str) -> _Outcome:
                          it. Distinct so the summary doesn't mis-attribute
                          the failure to the container. `detail` is the raw
                          orchestrator error.
-        'UNAVAILABLE'  — RunPod has no capacity for this instance — try next
-        'STUCK'        — pod was created but RunPod never assigned an SSH
+        'UNAVAILABLE'  — Runpod has no capacity for this instance — try next
+        'STUCK'        — pod was created but Runpod never assigned an SSH
                          endpoint within CREATE_TIMEOUT. Almost always a bad
                          host in the scheduler pool, not an image bug — caller
                          should try a different instance type.
@@ -423,7 +423,7 @@ def test_image(
 
     Iterates instance types until one PASSes. Stops early on FAIL (real
     image bug — no point trying another GPU). UNAVAILABLE (capacity) and
-    STUCK (RunPod gave us a dead host) just move on to the next instance.
+    STUCK (Runpod gave us a dead host) just move on to the next instance.
     CREATE_FAIL also short-circuits: a non-capacity orchestrator error
     (e.g. bad image tag, registry auth) won't be fixed by another GPU.
     """
@@ -466,7 +466,7 @@ def test_image(
         # — this is usually an image / auth / registry problem.
         return "FAIL", last_create_error, last_create_inst
     if stuck_instances:
-        # We tried every instance and RunPod never gave us a working host
+        # We tried every instance and Runpod never gave us a working host
         # on any of them — surface that distinctly from "no capacity at
         # all".
         log(
@@ -477,7 +477,7 @@ def test_image(
         return (
             "SKIP",
             (
-                f"RunPod never assigned an SSH endpoint on "
+                f"Runpod never assigned an SSH endpoint on "
                 f"{len(stuck_instances)} instance type(s) — likely a "
                 "scheduler issue, try again later"
             ),

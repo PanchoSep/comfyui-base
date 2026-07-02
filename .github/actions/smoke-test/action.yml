@@ -1,7 +1,7 @@
 name: Smoke test
 description: |
   Generate a test manifest from bake image refs, then smoke-test each image
-  on a real RunPod pod via tests/test_images.py:
+  on a real Runpod pod via tests/test_images.py:
     - boots the image on the cheapest available eligible instance,
     - runs the per-group CUDA / GPU functional check over SSH,
     - terminates the pod (always — even on Ctrl-C / job timeout).
@@ -24,12 +24,12 @@ inputs:
       same `gpu` profile works regardless of what the image actually is.
     required: true
   runpod-api-key:
-    description: "RunPod API key (pod-management permissions required)"
+    description: "Runpod API key (pod-management permissions required)"
     required: true
   ssh-private-key:
     description: |
       PEM-formatted private key matching a public SSH key registered on the
-      RunPod account this API key belongs to. test_images.py uses it to ssh
+      Runpod account this API key belongs to. test_images.py uses it to ssh
       into the pod for the GPU/CUDA functional check and log capture.
     required: true
   budget-usd-per-hour:
@@ -122,7 +122,7 @@ inputs:
   on-skip:
     description: |
       What to do when at least one image ends up SKIPped (the smoke
-      test never actually ran on it — RunPod had no capacity on every
+      test never actually ran on it — Runpod had no capacity on every
       candidate, or every candidate landed on a stuck host). Real
       FAILs (broken container, CUDA check failed) are always fatal
       regardless of this knob.

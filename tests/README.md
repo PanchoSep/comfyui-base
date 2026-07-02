@@ -1,6 +1,6 @@
-# Smoke tests for RunPod container images
+# Smoke tests for Runpod container images
 
-Spins up each image on a real RunPod pod, waits for it to stay healthy
+Spins up each image on a real Runpod pod, waits for it to stay healthy
 for `DWELL_SEC` seconds, runs an image-appropriate functional check
 (CUDA / `nvidia-smi` / `torch.cuda` / optional JupyterLab), then
 terminates the pod. Designed to catch the failure modes that **only
@@ -43,7 +43,7 @@ tests/
    The API key needs **pod-management** permissions. You can find /
    generate one at <https://www.runpod.io/console/user/settings>.
 
-3. **SSH key registered on your RunPod account.** `test_images.py`
+3. **SSH key registered on your Runpod account.** `test_images.py`
    probes every pod over SSH for the real readiness signal and the
    GPU/CUDA functional check. `runpodctl` writes a managed key pair on
    first use; if you already have one in `~/.runpod/ssh/` you're set.
@@ -52,7 +52,7 @@ tests/
    <https://www.runpod.io/console/user/settings#ssh-keys>.
 
 4. **(Recommended)** A Docker Hub registry auth registered with
-   `runpodctl registry add`. RunPod datacenters share an anonymous Hub
+   `runpodctl registry add`. Runpod datacenters share an anonymous Hub
    IP pool that hits the `toomanyrequests` rate limit fast — without
    auth, parallel runs in particular will produce a wave of
    "image pull backoff" failures that look like image bugs but aren't.
@@ -139,8 +139,8 @@ The granular per-pod outcomes below collapse into them:
 | `PASS` | `PASS` | Image booted, all checks passed, survived dwell. | nothing |
 | `FAIL` | `FAIL` | Pod was created and the container itself proved broken (CUDA check failed, JupyterLab didn't start, crashed during dwell, etc.). Moving to another GPU won't help — the image is the problem. | fix the image |
 | `FAIL` | `CREATE_FAIL` | Pod-create returned a non-capacity, non-transient orchestrator error (bad image tag, registry auth, malformed request, missing CUDA version). | fix the manifest / image ref / auth |
-| `SKIP` | all `UNAVAILABLE` | RunPod had no capacity on **any** candidate instance type. | retry later, expand `instances:` list, or raise `max_price_per_hour` |
-| `SKIP` | some `STUCK` + rest `UNAVAILABLE` | At least one instance was scheduled but RunPod never assigned an SSH endpoint within `CREATE_TIMEOUT` (slow pull / dead host). | retry later — usually transient |
+| `SKIP` | all `UNAVAILABLE` | Runpod had no capacity on **any** candidate instance type. | retry later, expand `instances:` list, or raise `max_price_per_hour` |
+| `SKIP` | some `STUCK` + rest `UNAVAILABLE` | At least one instance was scheduled but Runpod never assigned an SSH endpoint within `CREATE_TIMEOUT` (slow pull / dead host). | retry later — usually transient |
 
 `FAIL` always exits `1`. `SKIP` is governed by `ON_SKIP` (env-var) /
 `on-skip` (CI input), one of:
@@ -259,12 +259,12 @@ Field reference:
 | `exclude_instances` | fnmatch-style patterns (case-insensitive) subtracted from the candidate list AFTER `instances:`, budget, or `check_all_gpu` selection. Useful for blocking known-bad host pairings without rewriting the whole list — e.g. `"*Blackwell*"` skips every Blackwell GPU (sm\_100 / sm\_120 are not in the kernel set of PyTorch ≤ 2.6 wheels). |
 | `min_cuda_version` | `X.Y` string passed to `runpodctl pod create --min-cuda-version`. Only used as a **fallback** when the image tag itself doesn't encode a CUDA version (e.g. NGC `nvidia-pytorch:25.11`). Image tags like `cu1281` / `cuda1281` always win. |
 | `test_jupyter` | `true` / `false` — when true, the pod is created with `JUPYTER_PASSWORD=admin` in env and HTTP port 8888 exposed, then the script SSHes in and verifies JupyterLab is actually listening **with Jupyter-specific assertions** (`jupyter server list`, `/api/status` with token). Use for groups whose images use `container-template/start.sh` (`runpod/base`, `runpod/pytorch`, `runpod/autoresearch`, `rocm`). Skip for NGC `nvidia-pytorch` (different entrypoint). Default: `false`. |
-| `test_ports` | List of TCP ports the image is expected to serve over HTTP. Each port is exposed as `<port>/http` so RunPod's public proxy registers it, then the runner probes the port twice: (1) in-pod via SSH (`curl http://127.0.0.1:<port>/`), (2) via the public proxy (`https://<pod-id>-<port>.proxy.runpod.net/`). Generic counterpart to `test_jupyter` — no app-specific assertions, just "a server responds with HTTP `<500`". Use for ComfyUI (`8188`), FileBrowser (`8080`), or any app where you only need to verify "it's listening". Can coexist with `test_jupyter: true` (Jupyter on 8888 is still checked with the Jupyter-specific probes; any other port in `test_ports` gets the generic one). Default: empty. |
+| `test_ports` | List of TCP ports the image is expected to serve over HTTP. Each port is exposed as `<port>/http` so Runpod's public proxy registers it, then the runner probes the port twice: (1) in-pod via SSH (`curl http://127.0.0.1:<port>/`), (2) via the public proxy (`https://<pod-id>-<port>.proxy.runpod.net/`). Generic counterpart to `test_jupyter` — no app-specific assertions, just "a server responds with HTTP `<500`". Use for ComfyUI (`8188`), FileBrowser (`8080`), or any app where you only need to verify "it's listening". Can coexist with `test_jupyter: true` (Jupyter on 8888 is still checked with the Jupyter-specific probes; any other port in `test_ports` gets the generic one). Default: empty. |
 
 The `base_cpu` group is special: `runpodctl` 2.3.0 does not let us pick
 a specific CPU flavor (`--gpu-id` is rejected for `--compute-type CPU`),
 so the manifest needs ONLY an `images:` list for that group — no
-`instances:` / `max_price_per_hour:` / `min_vram_gb:`. RunPod picks a
+`instances:` / `max_price_per_hour:` / `min_vram_gb:`. Runpod picks a
 CPU flavor for us.
 
 
@@ -351,7 +351,7 @@ pytorch:
 |---|---|---|
 | `CLOUD_TYPE` | `SECURE` | `SECURE` or `COMMUNITY`. |
 | `DISK_GB` | `100` | Container disk size for GPU pods. |
-| `CPU_DISK_GB` | `20` | Container disk size for CPU pods. RunPod caps this per CPU flavor (20 GB on the cheapest, 30 GB on larger ones); 20 is the universal safe value. |
+| `CPU_DISK_GB` | `20` | Container disk size for CPU pods. Runpod caps this per CPU flavor (20 GB on the cheapest, 30 GB on larger ones); 20 is the universal safe value. |
 | `CPU_CANDIDATES` | `""` (uses `cpu-secure,cpu-community`) | CPU "instance candidates". `runpodctl pod create` doesn't accept `--vcpu` / `--mem` / `--cpu-flavor`, so we vary the axes it DOES expose for CPU: `--cloud-type` (SECURE vs COMMUNITY) and optional `--data-center-ids`. Each label becomes one candidate iterated by the same per-instance retry loop GPU groups use, so when SECURE is saturated COMMUNITY almost always has free CPU capacity. Format: `label:CLOUD[:DC1+DC2+…],label:CLOUD[:DC_CSV],…` (use `+` not `,` to separate DC ids inside one candidate so the outer csv stays unambiguous). CLOUD must be SECURE or COMMUNITY. Malformed entries are silently dropped; an empty/all-broken value falls back to the default 2-candidate list. |
 | `RUNPOD_API_KEY` | _(from `~/.runpod/config.toml`)_ | Used for the GraphQL GPU pricing query. Set this in CI / containers without a config file. |
 | `REGISTRY_AUTH_ID` | _(empty)_ | Explicit Docker Hub registry auth id to pass as `--registry-auth-id`. Overrides auto-discovery. |
@@ -359,16 +359,16 @@ pytorch:
 | `DWELL_SEC` | `60` | Extra seconds to wait after SSH becomes reachable, then re-probe SSH to catch containers that boot, accept SSH, then crash. Set 0 to skip the re-probe. |
 | `CREATE_TIMEOUT` | `600` | Max seconds to wait for SSH to become reachable. Raise for ROCm workflows (`create-timeout: "1200"` on the action) — the official `rocm/pytorch:*` base images are 30-50GB and routinely take 8-15 minutes to pull. |
 | `POLL_INTERVAL` | `10` | Poll cadence for SSH probes. |
-| `MAX_PARALLEL` | `1` | How many images to smoke-test concurrently. Each worker holds at most one pod, so this caps simultaneous live pods. Keep modest to avoid RunPod rate limits and surprise bills. |
-| `CREATE_RETRIES` | `3` | Retry pod-create up to N times on transient RunPod 5xx errors (`Something went wrong`, 502/503). Capacity shortages are NOT retried. |
+| `MAX_PARALLEL` | `1` | How many images to smoke-test concurrently. Each worker holds at most one pod, so this caps simultaneous live pods. Keep modest to avoid Runpod rate limits and surprise bills. |
+| `CREATE_RETRIES` | `3` | Retry pod-create up to N times on transient Runpod 5xx errors (`Something went wrong`, 502/503). Capacity shortages are NOT retried. |
 | `CREATE_RETRY_BACKOFF` | `10` | Seconds between retries (linear backoff). |
 | `STALL_HINT_AFTER` | `180` | Seconds without an SSH endpoint before the script prints a hint about slow pulls / possible Docker Hub rate limit. |
 | `SSH_LOG_FETCH` | `1` | `1`/`0` — fetch container logs via direct SSH at PASS/FAIL. |
 | `RUNPOD_SSH_KEY` | _(empty)_ | Path to private key matching the `PUBLIC_KEY` `runpodctl` injects into pods. Auto-discovered from common locations if not set. |
 | `JUPYTER_WAIT_TIMEOUT` | `30` | Seconds the in-pod Jupyter probe waits for `:8888` to bind. |
-| `JUPYTER_PROXY_TIMEOUT` | `60` | Seconds the proxy probe retries while RunPod's ingress registers the new pod. |
+| `JUPYTER_PROXY_TIMEOUT` | `60` | Seconds the proxy probe retries while Runpod's ingress registers the new pod. |
 | `PORT_WAIT_TIMEOUT` | `300` | Seconds the in-pod `test_ports` probe waits for a port to bind on `127.0.0.1` AND return an HTTP `<500` response (single unified retry loop, heartbeat every 30s). Fast apps (Jupyter, FileBrowser) exit in <2s. Bump to `900` for ComfyUI cold starts — first-boot `cp -r` of ~8 GB into `/workspace` plus ComfyUI-Manager FETCH can push readiness past 5 minutes. |
-| `PORT_PROXY_TIMEOUT` | `300` | Seconds the public-proxy `test_ports` probe retries waiting for RunPod's ingress to register the new pod. Same override pattern as `PORT_WAIT_TIMEOUT` — bump together when testing slow apps. |
+| `PORT_PROXY_TIMEOUT` | `300` | Seconds the public-proxy `test_ports` probe retries waiting for Runpod's ingress to register the new pod. Same override pattern as `PORT_WAIT_TIMEOUT` — bump together when testing slow apps. |
 
 
 ## Functional check
@@ -409,14 +409,14 @@ Two stages, both must pass:
    Catches port-type misconfigurations (`8888/tcp` instead of
    `8888/http` — the proxy never wires up non-http ports) and DNS /
    proxy registration issues that would prevent real users from
-   reaching Jupyter from the RunPod console.
+   reaching Jupyter from the Runpod console.
 
 
 ## Per-port checks (opt-in via manifest `test_ports: [...]`)
 
 Generic counterpart to the Jupyter check — verifies that **some** HTTP
 server binds each listed port and answers, both locally and through
-RunPod's public proxy. No app-specific assertions, so it's the right
+Runpod's public proxy. No app-specific assertions, so it's the right
 tool for ComfyUI (`8188`), FileBrowser (`8080`), Tensorboard, etc.
 
 For every port in the list, two probes run in sequence (both must pass):
@@ -435,7 +435,7 @@ For every port in the list, two probes run in sequence (both must pass):
    https://<pod-id>-<port>.proxy.runpod.net/`. Same `<500` acceptance
    criterion. Catches the most common end-user-facing failure mode:
    the port was declared `<port>/tcp` (or not declared at all) so
-   RunPod's proxy never registered it — the in-pod probe would still
+   Runpod's proxy never registered it — the in-pod probe would still
    pass, but real users can't reach the service from a browser.
 
 Independent from `test_jupyter`. You can enable both — port 8888 will
@@ -459,7 +459,7 @@ a driver-version regression).
 
 1. **Instance selection.** When neither `instances:` nor
    `max_price_per_hour:` is set, the runner pulls **every** GPU from
-   the RunPod catalog (`gpuTypes` GraphQL query), then applies the
+   the Runpod catalog (`gpuTypes` GraphQL query), then applies the
    usual `manufacturer:` / `min_vram_gb:` / `exclude_instances:`
    filters. With an explicit list / budget, those still win — so you
    can intentionally narrow the matrix.
@@ -487,7 +487,7 @@ wraps everything in this script needs for a clean CI run:
 
 1. Installs the pinned `runpodctl` binary (`runpodctl-version`,
    `runpodctl-sha256` inputs).
-2. Configures the RunPod API key (`runpod-api-key` input) into
+2. Configures the Runpod API key (`runpod-api-key` input) into
    `~/.runpod/config.toml`.
 3. Writes the `ssh-private-key` input to `~/.ssh/id_runpod` and exports
    `RUNPOD_SSH_KEY` so the in-pod CUDA probe and log fetch work.
@@ -532,12 +532,12 @@ fields.
 | every group says `no capacity on any of N candidate instance type(s)` | budget too low / VRAM too high / region saturated | raise `max_price_per_hour`, drop `min_vram_gb`, or set explicit `instances:` |
 | only the `base_cpu` group says `no capacity` while GPU groups pass | the cloud(s) you target don't have CPU capacity right now | by default we already try SECURE then COMMUNITY. If both are full, add DC-pinned candidates: `CPU_CANDIDATES="cpu-secure:SECURE,cpu-community:COMMUNITY,cpu-eu:COMMUNITY:EU-RO-1+EU-NL-1,cpu-us:COMMUNITY:US-OR-1"` |
 | pod stays in `ssh endpoint not assigned yet` past `STALL_HINT_AFTER` | slow image pull or Docker Hub `toomanyrequests` | add registry auth, reduce `MAX_PARALLEL`, or wait 6 h for the Hub rate limit to reset |
-| `ssh_probe=FAIL — Permission denied (publickey)` | wrong SSH key | export `RUNPOD_SSH_KEY=/path/to/private/key` whose public half is on the RunPod account |
+| `ssh_probe=FAIL — Permission denied (publickey)` | wrong SSH key | export `RUNPOD_SSH_KEY=/path/to/private/key` whose public half is on the Runpod account |
 | `pod entered TIMEOUT state` repeatedly on Blackwell GPUs for a `pytorch` group | PyTorch ≤ 2.6 has no `sm_100`/`sm_120` kernels | add `exclude_instances: ["*Blackwell*"]` to the group |
 | `nvidia-container-cli: requirement error: unsatisfied condition: cuda>=X.Y` in pod logs | image needs a newer driver than the host has | set `min_cuda_version: "X.Y"` in the manifest (only needed for tags without a `cuXYZW`/`cudaXYZW` marker) |
 | `jupyter check (in-pod) FAILED -- start.sh did not bring up JupyterLab` | `start.sh` is launching Jupyter with the wrong Python interpreter (classic Ubuntu 22.04 `python3` → 3.10 vs `python` → 3.12) | fix `container-template/start.sh` to use `python -m jupyter lab` |
 | `jupyter check (public proxy) FAILED` but in-pod check passed | port exposed as `8888/tcp` instead of `8888/http`, OR proxy hasn't registered the pod yet | check `pod create --ports` arg; bump `JUPYTER_PROXY_TIMEOUT` if proxy is just slow |
-| script hangs at `Cleaning up N leftover pod(s)…` | RunPod API is slow to respond to delete | wait it out; `--terminate-after` (~2 h) is the backstop and will kill anything we missed |
+| script hangs at `Cleaning up N leftover pod(s)…` | Runpod API is slow to respond to delete | wait it out; `--terminate-after` (~2 h) is the backstop and will kill anything we missed |
 
 
 ## Exit code
@@ -546,7 +546,7 @@ fields.
 `ON_SKIP ∈ {warn, pass}`. `1` if any image FAILed (broken container —
 always fatal), or if any image SKIPped under the default `ON_SKIP=fail`.
 
-SKIPs mean the smoke test never actually ran on the image (RunPod had no
+SKIPs mean the smoke test never actually ran on the image (Runpod had no
 capacity on every candidate, or every candidate landed on a stuck host)
 — that's effectively zero validation, so the default is strict.
 Override with:

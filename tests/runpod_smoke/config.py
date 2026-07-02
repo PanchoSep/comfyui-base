@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 CLOUD_TYPE = os.environ.get("CLOUD_TYPE", "SECURE")
 DISK_GB = int(os.environ.get("DISK_GB", "100"))
-# CPU pods on RunPod cap container disk by flavor: the cheapest flavors
+# CPU pods on Runpod cap container disk by flavor: the cheapest flavors
 # (cpu3c-2-4 and similar) reject >20 GB outright; larger ones cap at 30 GB.
 # 20 GB is the universal safe value — and plenty for a smoke-test that
 # only boots start.sh and dwells for a minute. Overridable for the rare
@@ -33,12 +33,12 @@ POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
 
 # Number of images to smoke-test concurrently. Each worker holds at most one
 # pod at a time, so MAX_PARALLEL=3 means up to 3 pods alive simultaneously.
-# Keep modest: RunPod has per-account rate limits, and your wallet has limits
+# Keep modest: Runpod has per-account rate limits, and your wallet has limits
 # too (DISK_GB * pods * hours can add up).
 MAX_PARALLEL = int(os.environ.get("MAX_PARALLEL", "1"))
 
 # What to do when at least one image ended up SKIPped. SKIPs mean the
-# test never actually ran against the image — RunPod had no capacity
+# test never actually ran against the image — Runpod had no capacity
 # on every candidate, or every candidate landed on a stuck host. In CI
 # that's effectively zero validation, so the default is strict ('fail').
 # Modes:
@@ -48,7 +48,7 @@ MAX_PARALLEL = int(os.environ.get("MAX_PARALLEL", "1"))
 #   'warn' — exit 0 + GitHub `::warning::` annotation. Job stays green
 #            but the run shows a yellow warning bubble in the PR check
 #            tab. Use when capacity-shortage is expected (tight DCs)
-#            and you'd rather not block PRs on RunPod's free capacity,
+#            and you'd rather not block PRs on Runpod's free capacity,
 #            but you still want a visible signal.
 #   'pass' — exit 0, no annotation. Legacy lenient behaviour, no signal
 #            at all. Avoid unless you have downstream tooling that
@@ -66,7 +66,7 @@ def _coerce_on_skip(raw: str) -> str:
 
 ON_SKIP: str = _coerce_on_skip(os.environ.get("ON_SKIP", "fail"))
 
-# How many times to retry pod-create when RunPod returns a transient
+# How many times to retry pod-create when Runpod returns a transient
 # orchestrator error ("Something went wrong", 502/503, etc.). Capacity-
 # shortage errors are NOT retried (we move on to the next instance instead).
 CREATE_RETRIES = int(os.environ.get("CREATE_RETRIES", "3"))
@@ -77,7 +77,7 @@ CREATE_RETRY_BACKOFF = int(os.environ.get("CREATE_RETRY_BACKOFF", "10"))
 # — just an informational note in the logs.
 STALL_HINT_AFTER = int(os.environ.get("STALL_HINT_AFTER", "180"))
 
-# Docker Hub authenticated pulls — without this, RunPod datacenters share
+# Docker Hub authenticated pulls — without this, Runpod datacenters share
 # an anonymous IP pool that hits Docker Hub's `toomanyrequests` rate limit
 # fast. Either set REGISTRY_AUTH_ID explicitly, or REGISTRY_AUTH_NAME to
 # pick by display name, or the script auto-picks the first entry from
@@ -97,7 +97,7 @@ REGISTRY_AUTH_NAME = os.environ.get("REGISTRY_AUTH_NAME", "")
 # Earlier we stored a module-level constant (`AUTO_TERMINATE = now+2h`),
 # which silently expired after the first 2h of any long-running session:
 # all pods created later got a `--terminate-after` timestamp IN THE
-# PAST, which RunPod accepts without complaint but never acts on, and
+# PAST, which Runpod accepts without complaint but never acts on, and
 # the pods kept burning credits until the user noticed. After a single
 # overnight run that cost real money this was changed to a function.
 AUTO_TERMINATE_HOURS = int(os.environ.get("AUTO_TERMINATE_HOURS", "2"))
@@ -118,7 +118,7 @@ def auto_terminate_deadline() -> str:
 
 # Container logs aren't exposed via runpodctl 2.3.0's JSON, so we SSH
 # directly to the pod's exposed port 22 (mapped to a random high port on
-# a public IP by RunPod) to grab them. The endpoint is discovered from
+# a public IP by Runpod) to grab them. The endpoint is discovered from
 # `pod get`'s ssh.ip / ssh.port fields once the pod is scheduled.
 #   Override SSH_IDENTITY if your key lives in a non-standard location.
 #   Set SSH_LOG_FETCH=0 to skip SSH-based log fetching entirely.
@@ -131,7 +131,7 @@ SSH_OPTS = [
     "-o", "BatchMode=yes",
     "-o", "LogLevel=ERROR",
     # OpenSSH 8.7+ disables ssh-rsa (SHA-1) by default. The sshd inside
-    # RunPod base images can still want legacy ssh-rsa for RSA client keys
+    # Runpod base images can still want legacy ssh-rsa for RSA client keys
     # (which is what runpodctl auto-generates), so we re-enable it
     # explicitly.
     "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
@@ -145,7 +145,7 @@ SSH_OPTS = [
 
 # Password we hand to start.sh via env. Not a secret — every pod we spin
 # up is auto-terminated within AUTO_TERMINATE and is only reachable through
-# RunPod's authenticated proxy. We just need ANY non-empty value so start.sh
+# Runpod's authenticated proxy. We just need ANY non-empty value so start.sh
 # decides to launch Jupyter (see start.sh: `if [[ $JUPYTER_PASSWORD ]]`).
 JUPYTER_TEST_PASSWORD = "admin"
 
@@ -153,7 +153,7 @@ JUPYTER_TEST_PASSWORD = "admin"
 # ready", so a brief startup grace is needed before we probe.
 JUPYTER_WAIT_TIMEOUT = int(os.environ.get("JUPYTER_WAIT_TIMEOUT", "30"))
 
-# RunPod exposes any port declared as `<port>/http` through its public
+# Runpod exposes any port declared as `<port>/http` through its public
 # proxy at `https://<pod-id>-<port>.proxy.runpod.net`. The proxy takes a
 # few seconds to register newly-exposed ports — we retry up to this many
 # seconds before giving up.
@@ -183,7 +183,7 @@ PORT_WAIT_TIMEOUT = int(os.environ.get("PORT_WAIT_TIMEOUT", "300"))
 # once bound) without making us impatient with slower-to-boot apps.
 # Same override pattern as PORT_WAIT_TIMEOUT — bump together for slow
 # apps (proxy probe runs AFTER in-pod probe confirms the server is up,
-# but RunPod's proxy is eventually-consistent and can lag by ~10-30s).
+# but Runpod's proxy is eventually-consistent and can lag by ~10-30s).
 PORT_PROXY_TIMEOUT = int(os.environ.get("PORT_PROXY_TIMEOUT", "300"))
 
 
@@ -209,7 +209,7 @@ CPU_GROUP_NAMES: frozenset[str] = frozenset({"base_cpu"})
 # `--cpu-flavor`, `--vcpu`, or `--mem`. The legacy `runpodctl create pod`
 # command does have them, but it's a different code path with different
 # flags — the new command takes (`--compute-type CPU`, `--cloud-type`,
-# optional `--data-center-ids`) and lets RunPod pick the cheapest CPU
+# optional `--data-center-ids`) and lets Runpod pick the cheapest CPU
 # flavor that fits the container disk size for the chosen cloud + DC.
 #
 # To get MULTIPLE CPU "candidates" we vary the axes runpodctl actually
@@ -240,7 +240,7 @@ CPU_GROUP_NAMES: frozenset[str] = frozenset({"base_cpu"})
 @dataclass(frozen=True)
 class CpuCandidate:
     """One CPU pod-create attempt — varied along the axes that
-    `runpodctl pod create` exposes for CPU pods. RunPod's scheduler
+    `runpodctl pod create` exposes for CPU pods. Runpod's scheduler
     still picks the actual CPU flavor (vCPU/RAM tier) inside the chosen
     cloud + DC, based on container disk size."""
     cloud_type: str           # 'SECURE' or 'COMMUNITY'
@@ -310,7 +310,7 @@ def cpu_candidate_for(instance: str) -> CpuCandidate:
 
 # Display-name -> runpodctl --gpu-id mapping. Populated at startup from
 # `runpodctl gpu list --include-unavailable`. Keeps the YAML manifest free
-# of RunPod-internal gpuId strings — users only put display names there.
+# of Runpod-internal gpuId strings — users only put display names there.
 GPU_ID_MAP: dict[str, str] = {}
 
 # GPU catalog with pricing. Populated at startup via GraphQL since
@@ -343,7 +343,7 @@ GROUP_TEST_JUPYTER: dict[str, bool] = {}
 
 # Per-group list of TCP ports to test for HTTP availability. Populated in
 # main() from the `test_ports:` manifest field. When non-empty:
-#   * `pod.create_pod` exposes each port as `<port>/http` so RunPod's proxy
+#   * `pod.create_pod` exposes each port as `<port>/http` so Runpod's proxy
 #     wires it up.
 #   * `runner.test_pair` probes each port twice per pod — once inside the
 #     pod over SSH (server bound to localhost) and once via the public

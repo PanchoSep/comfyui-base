@@ -2,7 +2,7 @@
 """Generate a test manifest YAML for tests/test_images.py.
 
 Reads a JSON array of image refs from the image-name action and emits the
-minimal manifest format consumed by the local RunPod smoke-test runner.
+minimal manifest format consumed by the local Runpod smoke-test runner.
 """
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test RunPod container images.
+"""Smoke-test Runpod container images.
 
 Entry point. See ./README.md for the manifest schema, env vars, and how
 the CUDA / Jupyter checks work. All implementation lives in the
@@ -204,7 +204,7 @@ def _resolve_all_instances(manifest: dict[str, dict]) -> dict[str, list[str]]:
 
 
 def _warn_unknown_instances(resolved: dict[str, list[str]]) -> None:
-    """Surface manifest entries that don't map to any RunPod display name
+    """Surface manifest entries that don't map to any Runpod display name
     (typos / casing) so the user sees them once at startup instead of
     inside the per-job logs."""
     unmapped = sorted({
@@ -216,7 +216,7 @@ def _warn_unknown_instances(resolved: dict[str, list[str]]) -> None:
     if not unmapped:
         return
     log(
-        f"warn: {len(unmapped)} instance(s) don't match any RunPod "
+        f"warn: {len(unmapped)} instance(s) don't match any Runpod "
         "displayName — check spelling/casing:"
     )
     for inst in unmapped:
@@ -411,7 +411,7 @@ def _print_summary(results: list[Result]) -> int:
     # decide exit code based on the mode.
     msg = (
         f"{counts['SKIP']} image(s) SKIPped — no real validation "
-        "happened. RunPod had no capacity on every candidate instance "
+        "happened. Runpod had no capacity on every candidate instance "
         "type, or every candidate landed on a stuck host. "
         "Set ON_SKIP=pass to silence this, ON_SKIP=warn to keep the "
         "job green with a warning, or ON_SKIP=fail (default) to make "
