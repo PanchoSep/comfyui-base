@@ -6,6 +6,7 @@ VENV_DIR="$COMFYUI_DIR/.venv-cu128"
 OLD_VENV_DIR="$COMFYUI_DIR/.venv"
 FILEBROWSER_CONFIG="/root/.config/filebrowser/config.json"
 DB_FILE="/workspace/runpod-slim/filebrowser.db"
+PIP_CONSTRAINT_FILE="/opt/comfyui-runtime-constraints.txt"
 
 # ---------------------------------------------------------------------------- #
 #                          Function Definitions                                  #
@@ -57,7 +58,7 @@ export_env_vars() {
     > "$SSH_ENV_DIR"
     
     # Export to multiple locations for maximum compatibility
-    printenv | grep -E '^RUNPOD_|^PATH=|^_=|^CUDA|^LD_LIBRARY_PATH|^PYTHONPATH' | while read -r line; do
+    printenv | grep -E '^RUNPOD_|^PATH=|^_=|^CUDA|^LD_LIBRARY_PATH|^PYTHONPATH|^PIP_CONSTRAINT=' | while read -r line; do
         # Get variable name and value
         name=$(echo "$line" | cut -d= -f1)
         value=$(echo "$line" | cut -d= -f2-)
@@ -107,6 +108,11 @@ start_jupyter() {
 # ---------------------------------------------------------------------------- #
 
 # Setup environment
+if [ -f "$PIP_CONSTRAINT_FILE" ]; then
+    export PIP_CONSTRAINT="$PIP_CONSTRAINT_FILE"
+    echo "Using runtime pip constraints from $PIP_CONSTRAINT_FILE"
+fi
+
 setup_ssh
 export_env_vars
 
@@ -165,8 +171,8 @@ if [ -d "$OLD_VENV_DIR" ] && [ ! -d "$VENV_DIR" ]; then
             INSTALLED=$((INSTALLED + 1))
         fi
     done
-    echo "Upgrading ComfyUI requirements..."
-    pip install --upgrade -r "$COMFYUI_DIR/requirements.txt" 2>&1 | grep -E "^(Successfully|ERROR)" || true
+    echo "Ensuring ComfyUI requirements are present..."
+    pip install -r "$COMFYUI_DIR/requirements.txt" 2>&1 | grep -E "^(Successfully|ERROR)" || true
     echo "Migration complete — $INSTALLED user nodes processed (${NODE_COUNT} total, baked nodes skipped)"
     echo "Old venv backed up at ${OLD_VENV_DIR}.bak — delete it to free space:"
     echo "  rm -rf ${OLD_VENV_DIR}.bak"

@@ -95,19 +95,21 @@ RUN cat ComfyUI/requirements.txt > requirements.in && \
     echo "jupyter" >> requirements.in && \
     echo "jupyter-resource-usage" >> requirements.in && \
     echo "jupyterlab-nvdashboard" >> requirements.in && \
-    echo "torch==${TORCH_VERSION}" >> constraints.txt && \
-    echo "torchvision==${TORCHVISION_VERSION}" >> constraints.txt && \
-    echo "torchaudio==${TORCHAUDIO_VERSION}" >> constraints.txt && \
-    echo "pillow>=12.1.1" >> constraints.txt && \
+    sed -i -E '/^[[:space:]]*(torch|torchvision|torchaudio)([[:space:]]|[\[<>=!~;#]|$)/d' requirements.in && \
+    echo "torch==${TORCH_VERSION}" >> requirements.in && \
+    echo "torchvision==${TORCHVISION_VERSION}" >> requirements.in && \
+    echo "torchaudio==${TORCHAUDIO_VERSION}" >> requirements.in && \
+    echo "pillow>=12.1.1" >> requirements.in && \
     TORCH_INDEX_URL="https://download.pytorch.org/whl/${TORCH_INDEX_SUFFIX}" && \
     PIP_INDEX_URL=https://pypi.org/simple \
     PIP_EXTRA_INDEX_URL="${TORCH_INDEX_URL}" \
-    PIP_CONSTRAINT=constraints.txt \
     pip-compile --generate-hashes --output-file=requirements.lock --strip-extras --allow-unsafe requirements.in && \
     python3.12 -m pip install --no-cache-dir --ignore-installed --require-hashes \
     --index-url https://pypi.org/simple \
     --extra-index-url "${TORCH_INDEX_URL}" \
-    -r requirements.lock
+    -r requirements.lock && \
+    TORCH_VERSION="${TORCH_VERSION}" TORCHVISION_VERSION="${TORCHVISION_VERSION}" TORCHAUDIO_VERSION="${TORCHAUDIO_VERSION}" \
+    python3.12 -c 'import importlib.metadata as m, os, sys; expected = {"torch": os.environ["TORCH_VERSION"], "torchvision": os.environ["TORCHVISION_VERSION"], "torchaudio": os.environ["TORCHAUDIO_VERSION"]}; mismatches = [f"{pkg}: expected {version}, got {m.version(pkg)}" for pkg, version in expected.items() if m.version(pkg) != version]; sys.exit("\n".join(mismatches) if mismatches else 0)'
 
 # Pre-populate ComfyUI-Manager cache so first cold start skips the slow registry fetch
 COPY scripts/prebake-manager-cache.py /tmp/prebake-manager-cache.py
@@ -128,10 +130,18 @@ ENV FILEBROWSER_CONFIG=/workspace/runpod-slim/.filebrowser.json
 
 # ---- CUDA variant (re-declared for runtime stage) ----
 ARG CUDA_VERSION_DASH=12-8
+ARG TORCH_VERSION
+ARG TORCHVISION_VERSION
+ARG TORCHAUDIO_VERSION
 
 # ---- FileBrowser version pin (set in docker-bake.hcl) ----
 ARG FILEBROWSER_VERSION
 ARG FILEBROWSER_SHA256
+
+# Keep runtime pip installs aligned with the baked CUDA-specific PyTorch stack.
+RUN printf "torch==%s\ntorchvision==%s\ntorchaudio==%s\n" \
+    "$TORCH_VERSION" "$TORCHVISION_VERSION" "$TORCHAUDIO_VERSION" \
+    > /opt/comfyui-runtime-constraints.txt
 
 # Update and install runtime dependencies, CUDA, and common tools
 RUN apt-get update && \
