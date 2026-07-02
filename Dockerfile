@@ -15,6 +15,7 @@ ARG INT8FAST_SHA
 ARG CONTROLALTAI_SHA
 ARG CRTNODES_SHA
 ARG LOGIN_SHA
+ARG SAVEIMAGEEXTENDED_SHA
 ARG TORCH_VERSION
 ARG TORCHVISION_VERSION
 ARG TORCHAUDIO_VERSION
@@ -74,7 +75,9 @@ RUN curl -fSL "https://github.com/ltdrdata/ComfyUI-Manager/archive/${MANAGER_SHA
     curl -fSL "https://github.com/PGCRT/CRT-Nodes/archive/${CRTNODES_SHA}.tar.gz" -o crtnodes.tar.gz && \
     mkdir -p CRT-Nodes && tar xzf crtnodes.tar.gz --strip-components=1 -C CRT-Nodes && rm crtnodes.tar.gz && \
     curl -fSL "https://github.com/liusida/ComfyUI-Login/archive/${LOGIN_SHA}.tar.gz" -o login.tar.gz && \
-    mkdir -p ComfyUI-Login && tar xzf login.tar.gz --strip-components=1 -C ComfyUI-Login && rm login.tar.gz
+    mkdir -p ComfyUI-Login && tar xzf login.tar.gz --strip-components=1 -C ComfyUI-Login && rm login.tar.gz && \
+    curl -fSL "https://github.com/audioscavenger/save-image-extended-comfyui/archive/${SAVEIMAGEEXTENDED_SHA}.tar.gz" -o saveimageext.tar.gz && \
+    mkdir -p save-image-extended-comfyui && tar xzf saveimageext.tar.gz --strip-components=1 -C save-image-extended-comfyui && rm saveimageext.tar.gz
 
 # Init git repos with upstream remotes so ComfyUI-Manager can detect versions
 # and users can update via Manager at their own risk
@@ -104,7 +107,10 @@ RUN cd /tmp/build/ComfyUI && \
     git remote add origin https://github.com/PGCRT/CRT-Nodes.git && \
     cd /tmp/build/ComfyUI/custom_nodes/ComfyUI-Login && \
     git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "ComfyUI-Login ${LOGIN_SHA}" && \
-    git remote add origin https://github.com/liusida/ComfyUI-Login.git
+    git remote add origin https://github.com/liusida/ComfyUI-Login.git && \
+    cd /tmp/build/ComfyUI/custom_nodes/save-image-extended-comfyui && \
+    git init && git add -A && git -c user.name=- -c user.email=- commit -q -m "save-image-extended-comfyui ${SAVEIMAGEEXTENDED_SHA}" && \
+    git remote add origin https://github.com/audioscavenger/save-image-extended-comfyui.git
 
 # Generate lock file from all requirements (including torch pins), then install with hash verification
 WORKDIR /tmp/build

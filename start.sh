@@ -263,7 +263,7 @@ if [ -d "$OLD_VENV_DIR" ] && [ ! -d "$VENV_DIR" ]; then
     source "$VENV_DIR/bin/activate"
     python -m ensurepip
     # Skip nodes baked into the image — their deps are in system site-packages
-    BAKED_NODES="ComfyUI-Manager ComfyUI-KJNodes Civicomfy ComfyUI-RunpodDirect ComfyUI-INT8-Fast ControlAltAI-Nodes CRT-Nodes ComfyUI-Login"
+    BAKED_NODES="ComfyUI-Manager ComfyUI-KJNodes Civicomfy ComfyUI-RunpodDirect ComfyUI-INT8-Fast ControlAltAI-Nodes CRT-Nodes ComfyUI-Login save-image-extended-comfyui"
     CURRENT=0
     INSTALLED=0
     for req in "$COMFYUI_DIR"/custom_nodes/*/requirements.txt; do

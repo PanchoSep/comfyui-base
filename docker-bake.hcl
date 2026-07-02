@@ -30,6 +30,9 @@ variable "CRTNODES_SHA" {
 variable "LOGIN_SHA" {
   default = "3f09fcbd5e18"
 }
+variable "SAVEIMAGEEXTENDED_SHA" {
+  default = "d49387f000b2"
+}
 # Regular image (cu128)
 variable "TORCH_VERSION" {
   default = "2.10.0+cu128"
@@ -76,6 +79,7 @@ target "common" {
     CONTROLALTAI_SHA    = CONTROLALTAI_SHA
     CRTNODES_SHA        = CRTNODES_SHA
     LOGIN_SHA           = LOGIN_SHA
+    SAVEIMAGEEXTENDED_SHA = SAVEIMAGEEXTENDED_SHA
     TORCH_VERSION       = TORCH_VERSION
     TORCHVISION_VERSION = TORCHVISION_VERSION
     TORCHAUDIO_VERSION  = TORCHAUDIO_VERSION
