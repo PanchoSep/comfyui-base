@@ -226,7 +226,7 @@ setup_sync() {
     (
         while true; do
             sleep "$SYNC_INTERVAL"
-            rclone --config "$RCLONE_CONF" sync \
+            rclone --config "$RCLONE_CONF" copy \
                 "$COMFYUI_DIR/output" \
                 "${RCLONE_REMOTE}:${VPS_OUTPUT_PATH#/}" \
                 --transfers 4 --checkers 8 \
