@@ -176,14 +176,14 @@ setup_sync() {
     if [ -n "${SYNC_SSH_KEY:-}" ]; then
         echo "Sync: Using SSH key from SYNC_SSH_KEY env var"
         echo "$SYNC_SSH_KEY" | base64 -d > "$SSH_KEY_NV"
-        chmod 600 "$SSH_KEY_NV"
-        # Regenerate .pub in case it's missing
-        ssh-keygen -y -f "$SSH_KEY_NV" > "${SSH_KEY_NV}.pub" 2>/dev/null
+        chmod 600 "$SSH_KEY_NV" 2>/dev/null || true
+        # Regenerate .pub in case it's missing (NFS may reject writes)
+        ssh-keygen -y -f "$SSH_KEY_NV" > "${SSH_KEY_NV}.pub" 2>/dev/null || true
     elif [ -f "$SSH_KEY_NV" ]; then
         echo "Sync: Using existing SSH key from $SSH_KEY_NV"
     else
         echo "Sync: Generating new SSH ed25519 key..."
-        ssh-keygen -t ed25519 -f "$SSH_KEY_NV" -N "" -C "comfyui-sync" -q
+        ssh-keygen -t ed25519 -f "$SSH_KEY_NV" -N "" -C "comfyui-sync" -q || true
         PUBKEY=$(cat "${SSH_KEY_NV}.pub")
         echo ""
         echo "╔══════════════════════════════════════════════════════╗"
