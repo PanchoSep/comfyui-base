@@ -148,6 +148,33 @@ RUN python3.12 /tmp/prebake-manager-cache.py /tmp/build/ComfyUI/user/__manager/c
 # Bake ComfyUI + custom nodes into a known location for runtime copy
 RUN cp -r /tmp/build/ComfyUI /opt/comfyui-baked
 
+# Split PyTorch stack into /opt/torch-site-packages so the runtime stage
+# can COPY it as a separate, cacheable layer. PyTorch + NVIDIA + Triton
+# (~6.6 GB uncompressed) rarely change; the remaining packages (~2.7 GB)
+# stay in /usr/local/lib/python3.12 for a second COPY.
+# Done LAST in the builder so all previous steps had full torch available.
+RUN mkdir -p /opt/torch-site-packages
+RUN python3.12 <<'PYEOF'
+import shutil, os, glob
+src = '/usr/local/lib/python3.12/dist-packages'
+dst = '/opt/torch-site-packages'
+os.makedirs(dst, exist_ok=True)
+patterns = ['torch', 'torch-*', 'torchgen', 'torchsde', 'torchsde-*',
+            'torchvision', 'torchvision-*', 'torchvision.libs',
+            'torchaudio', 'torchaudio-*',
+            'triton', 'triton-*',
+            'nvidia', 'nvidia_*',
+            'functorch']
+moved = 0
+for p in patterns:
+    for item in glob.glob(os.path.join(src, p)):
+        dst_path = os.path.join(dst, os.path.basename(item))
+        if not os.path.exists(dst_path):
+            shutil.move(item, dst_path)
+            moved += 1
+print(f'Moved {moved} torch-related items to /opt/torch-site-packages')
+PYEOF
+
 # ============================================================================
 # Stage 2: Runtime - Clean image with pre-installed packages
 # ============================================================================
@@ -208,7 +235,11 @@ RUN apt-get update && \
     && rm cuda-keyring_1.1-1_all.deb \
     && rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
 
-# Copy Python packages, executables, and Jupyter data from builder stage
+# Copy Python packages from builder stage in two layers so the large
+# PyTorch+NVIDIA stack (rarely changed) stays cached independently:
+# Layer A: PyTorch + NVIDIA CUDA stack (~3.5 GB compressed, rarely changes)
+COPY --from=builder /opt/torch-site-packages /usr/local/lib/python3.12
+# Layer B: ComfyUI + custom nodes deps + Jupyter (~1.6 GB compressed)
 COPY --from=builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /usr/local/share/jupyter /usr/local/share/jupyter

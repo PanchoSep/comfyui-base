@@ -239,9 +239,6 @@ setup_sync() {
     echo "Sync: Background sync PID: $!"
 }
 
-setup_sync
-echo ""
-
 # Create default comfyui_args.txt if it doesn't exist
 ARGS_FILE="/workspace/runpod-slim/comfyui_args.txt"
 if [ ! -f "$ARGS_FILE" ]; then
@@ -259,7 +256,7 @@ if [ -d "$OLD_VENV_DIR" ] && [ ! -d "$VENV_DIR" ]; then
     echo "============================================="
     mv "$OLD_VENV_DIR" "${OLD_VENV_DIR}.bak"
     cd "$COMFYUI_DIR"
-    python3.12 -m venv --system-site-packages "$VENV_DIR"
+    python3.12 -m venv --copies --system-site-packages "$VENV_DIR"
     source "$VENV_DIR/bin/activate"
     python -m ensurepip
     # Skip nodes baked into the image — their deps are in system site-packages
@@ -296,9 +293,10 @@ if [ ! -d "$COMFYUI_DIR" ] || [ ! -d "$VENV_DIR" ]; then
     fi
 
     # Create venv with access to system packages (torch, numpy, etc. pre-installed in image)
+    # Use --copies to avoid symlinks (NFS Network Volumes don't support them)
     if [ ! -d "$VENV_DIR" ]; then
         cd "$COMFYUI_DIR"
-        python3.12 -m venv --system-site-packages "$VENV_DIR"
+        python3.12 -m venv --copies --system-site-packages "$VENV_DIR"
         source "$VENV_DIR/bin/activate"
 
         # Ensure pip is available in the venv (needed for ComfyUI-Manager)
@@ -329,6 +327,11 @@ fi
 echo "Starting ComfyUI with args: $FIXED_ARGS"
 python main.py $FIXED_ARGS &
 COMFY_PID=$!
+
+# Start background sync loop now that ComfyUI is running
+# (moved here so output/ exists, SSH is ready, and venv is active)
+setup_sync
+
 trap "kill $COMFY_PID 2>/dev/null" SIGTERM SIGINT
 wait $COMFY_PID || true
 
