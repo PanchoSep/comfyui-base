@@ -238,7 +238,7 @@ RUN apt-get update && \
 # Copy Python packages from builder stage in two layers so the large
 # PyTorch+NVIDIA stack (rarely changed) stays cached independently:
 # Layer A: PyTorch + NVIDIA CUDA stack (~3.5 GB compressed, rarely changes)
-COPY --from=builder /opt/torch-site-packages /usr/local/lib/python3.12
+COPY --from=builder /opt/torch-site-packages /usr/local/lib/python3.12/dist-packages
 # Layer B: ComfyUI + custom nodes deps + Jupyter (~1.6 GB compressed)
 COPY --from=builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=builder /usr/local/bin /usr/local/bin
