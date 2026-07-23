@@ -103,6 +103,14 @@ start_jupyter() {
     echo "Jupyter Lab started"
 }
 
+# Clean output and preview images so every session starts fresh
+clean_session_outputs() {
+    echo "Cleaning previous session outputs/previews..."
+    rm -rf "$COMFYUI_DIR/output"/* 2>/dev/null || true
+    rm -rf "$COMFYUI_DIR/temp"/* 2>/dev/null || true
+    echo "Session outputs cleared"
+}
+
 # ---------------------------------------------------------------------------- #
 #                               Main Program                                     #
 # ---------------------------------------------------------------------------- #
@@ -221,21 +229,22 @@ setup_sync() {
     rclone --config "$RCLONE_CONF" mkdir "${RCLONE_REMOTE}:${VPS_OUTPUT_PATH#/}" 2>/dev/null || true
     echo "Sync: rclone configured (${RCLONE_REMOTE}:${VPS_OUTPUT_PATH})"
 
-    # Start background sync loop
+    # Start background sync loop (nohup + own log file, not a bare subshell)
     echo "Sync: Starting background sync loop every ${SYNC_INTERVAL}s..."
-    (
-        while true; do
-            sleep "$SYNC_INTERVAL"
-            rclone --config "$RCLONE_CONF" copy \
-                "$COMFYUI_DIR/output" \
-                "${RCLONE_REMOTE}:${VPS_OUTPUT_PATH#/}" \
-                --transfers 4 --checkers 8 \
-                --ignore-existing \
-                2>&1 | while IFS= read -r line; do
-                    echo "[sync] $line"
-                done
-        done
-    ) &
+    cat > /tmp/sync_loop.sh << EOF
+#!/bin/bash
+while true; do
+    sleep "$SYNC_INTERVAL"
+    rclone --config "$RCLONE_CONF" copy \
+        "$COMFYUI_DIR/output" \
+        "${RCLONE_REMOTE}:${VPS_OUTPUT_PATH#/}" \
+        --transfers 4 --checkers 8 \
+        --ignore-existing
+    echo "[sync] \$(date): done"
+done
+EOF
+    chmod +x /tmp/sync_loop.sh
+    nohup /tmp/sync_loop.sh > /tmp/sync.log 2>&1 &
     echo "Sync: Background sync PID: $!"
 }
 
@@ -313,6 +322,13 @@ fi
 
 # Warm up pip so ComfyUI-Manager's 5s timeout check doesn't fail on cold start
 python -m pip --version > /dev/null 2>&1
+
+clean_session_outputs
+
+# Persistent Triton/Inductor kernel cache (survives pod restarts via Network Volume)
+export TRITON_CACHE_DIR="/workspace/runpod-slim/triton-cache"
+export TORCHINDUCTOR_CACHE_DIR="/workspace/runpod-slim/inductor-cache"
+mkdir -p "$TRITON_CACHE_DIR" "$TORCHINDUCTOR_CACHE_DIR"
 
 # Start ComfyUI — keep container alive if it crashes so SSH/Jupyter remain accessible
 cd $COMFYUI_DIR
